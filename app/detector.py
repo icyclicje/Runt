@@ -72,6 +72,7 @@ class Detector:
         self._pool = cf.ThreadPoolExecutor(2, thread_name_prefix='detect')
         # card-shaped outlines in the last frame that matched nothing: [(quad, sharpness, glare)]
         self.last_unknown: list = []
+        self.snap_edges = True
 
     def load(self, indexes) -> None:
         m = vision.Matcher()
@@ -104,10 +105,10 @@ class Detector:
             return 0.0
         return float((self.matcher._center(qd) @ self.matcher.desc[i]).max())
 
-    def _outline_candidates(self, gray, mode, guide_size):
+    def _outline_candidates(self, gray, mode, guide_size, edges_out=None):
         quads = []
         if mode in ('auto', 'both'):
-            quads = [(q, 'edge', s) for q, s in vision.find_cards(gray, 5)]
+            quads = [(q, 'edge', s) for q, s in vision.find_cards(gray, 5, edges_out=edges_out)]
         if mode in ('guide', 'both'):
             quads.append((vision.guide_quad(gray.shape, guide_size), 'guide', 0.0))
         out = []
@@ -126,7 +127,8 @@ class Detector:
         # The two methods are independent until they're merged: run them side by side
         # (OpenCV releases the interpreter lock, so this is real parallelism).
         kp_feats = self._pool.submit(features.frame_features, gray) if use_keypoints and self.findex else None
-        outline = self._outline_candidates(gray, mode, guide_size)
+        edges: list = []
+        outline = self._outline_candidates(gray, mode, guide_size, edges_out=edges)
         dets: list[Detection] = []
 
         if kp_feats is not None:
@@ -138,6 +140,15 @@ class Detector:
                 quad = vision.order_quad(h.quad)
                 qd, cands, rows, canon = self._fingerprint(gray, quad)
                 score = self._score_for(qd, h.key)
+                if edges and self.snap_edges:
+                    # corners projected from keypoints in the artwork can drift a little:
+                    # try the outline snapped onto the card's real edges, keep what matches better
+                    q2 = vision.order_quad(edges[0].snap(quad))
+                    if not np.allclose(q2, quad, atol=1.0):
+                        qd2, cands2, rows2, canon2 = self._fingerprint(gray, q2)
+                        s2 = self._score_for(qd2, h.key)
+                        if s2 > score:
+                            quad, qd, cands, rows, canon, score = q2, qd2, cands2, rows2, canon2, s2
                 d = Detection(h.key, quad, score, h.inliers, h.spread, 'kp', cands, vision.sharpness(canon),
                               _glare(canon), abs(cv2.contourArea(quad)))
                 d.strength = strength_of(d)

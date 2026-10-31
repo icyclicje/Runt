@@ -52,16 +52,17 @@ def _bucket(kps, shape, grid=(10, 8), keep=400):
         return kps
     h, w = shape[:2]
     per = max(2, int(keep * 1.6 / (grid[0] * grid[1])))
-    cells: dict = {}
-    for k in kps:
-        c = (min(grid[0] - 1, int(k.pt[0] * grid[0] / w)), min(grid[1] - 1, int(k.pt[1] * grid[1] / h)))
-        cells.setdefault(c, []).append(k)
-    out = []
-    for lst in cells.values():
-        lst.sort(key=lambda k: -k.response)
-        out.extend(lst[:per])
-    out.sort(key=lambda k: -k.response)
-    return out[:keep]
+    arr = np.array([(k.pt[0], k.pt[1], k.response) for k in kps], np.float32)
+    cx = np.minimum(grid[0] - 1, (arr[:, 0] * grid[0] / w).astype(np.int32))
+    cy = np.minimum(grid[1] - 1, (arr[:, 1] * grid[1] / h).astype(np.int32))
+    cell = cy * grid[0] + cx
+    order = np.lexsort((-arr[:, 2], cell))                  # by cell, strongest first within each
+    sc = cell[order]
+    first = np.searchsorted(sc, sc, side='left')            # index of each cell's first entry
+    rank = np.arange(len(sc)) - first
+    keep_idx = order[rank < per]
+    keep_idx = keep_idx[np.argsort(-arr[keep_idx, 2])][:keep]
+    return [kps[i] for i in keep_idx]
 
 
 def ref_features(ref: np.ndarray, max_kp: int = 360):
@@ -182,12 +183,7 @@ class FeatureIndex:
             return []
         rows = np.concatenate([np.arange(self.off[c], self.off[c + 1]) for c in cand])
         sub_card = self.card_of[rows]
-        try:
-            pairs = cv2.BFMatcher(cv2.NORM_HAMMING).knnMatch(qdes, self.des[rows], k=2)
-        except cv2.error:
-            import os, tempfile
-            np.savez(os.path.join(tempfile.gettempdir(), 'bf_fail.npz'), q=qdes, t=self.des[rows], rows=rows)
-            raise
+        pairs = cv2.BFMatcher(cv2.NORM_HAMMING).knnMatch(qdes, self.des[rows], k=2)
         qi, ti = [], []
         for p in pairs:
             if not p:

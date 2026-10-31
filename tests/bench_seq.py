@@ -16,6 +16,7 @@ import os
 import sys
 import time
 
+import cv2
 import numpy as np
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -61,6 +62,7 @@ def run_trial(det, rng, target, table_in, table_out, art_pool, hard, sens, mode,
         frames[0] = ([(frames[0][0][0][0], frames[0][0][0][1], (0, 0), frames[0][0][0][3])], frames[0][1])
         frames += [([], False)] * 6
     first_held = next((i for i, (_, h) in enumerate(frames) if h), 0)
+    trace = []
     for i, (cards, held) in enumerate(frames):
         img = scene.render(cards, t=i / FPS)
         t0 = time.perf_counter()
@@ -68,6 +70,11 @@ def run_trial(det, rng, target, table_in, table_out, art_pool, hard, sens, mode,
         for key, d in tr.update(dets, i / FPS, thr, 0.5, 1.2, min_s):
             confirmed.append((key, i - first_held))
         times.append(time.perf_counter() - t0)
+        if held and target is not None:
+            mine = [d for d in dets if d.key == target[0]]
+            others = [d for d in dets if d.key != target[0]]
+            trace.append((max((d.strength for d in mine), default=0.0), mine[0] if mine else None, others[:1], img))
+    run_trial.trace = trace
     return confirmed, times
 
 
@@ -82,7 +89,9 @@ def main():
     ap.add_argument('--sens', default='balanced')
     ap.add_argument('--mode', default='auto')
     ap.add_argument('--seed', type=int, default=1)
+    ap.add_argument('--verbose', action='store_true', help='explain misses and save a frame of each')
     a = ap.parse_args()
+    cv2.setNumThreads(4)                         # same as the app
 
     db = CardDB(a.cache)
     db.load(refresh='never')
@@ -133,6 +142,14 @@ def main():
                 dup += len(hits) > 1
             else:
                 misses.append(target[0])
+                if a.verbose:
+                    tr_ = run_trial.trace
+                    st = np.array([x[0] for x in tr_])
+                    best = max(tr_, key=lambda x: x[0])
+                    other = next((x[2][0] for x in tr_ if x[2]), None)
+                    print(f'   MISS {target[0]}: held {len(st)} frames, seen in {int((st > 0).sum())}, '
+                          f'max strength {st.max():.2f}, mean {st.mean():.2f}; best {best[1]!r}; also saw {other!r}')
+                    cv2.imwrite(os.path.join(a.cache, f'miss_{trial}.jpg'), tr_[len(tr_) // 2][3])
         for b in bad:
             print('   FALSE SCAN:', b, '(target', target[0], ')')
     ms = 1000 * np.array(all_times)

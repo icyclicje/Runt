@@ -679,6 +679,7 @@ class Engine:
             'pack': self.current_pack_dict() if cs else None,
             'last': self.scan_dict(last),
             'recent': [self.scan_dict(x) for x in self.store.recent(16)],
+            'live': self.live(),
             'next_variant': self.next_variant,
             'session': {**self.store.totals(self.session_start), **{'packs': self.store.pack_totals(since=self.session_start)}},
             'camera': self.camera.info() if self.camera else None,

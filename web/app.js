@@ -507,6 +507,7 @@ const SETTINGS = [
     { key: 'hud_fps', label: 'Panel refresh rate', type: 'number', unit: 'fps' },
     { key: 'vr_autostart', label: 'Start with SteamVR', type: 'bool', help: 'Only works for the installed .exe.' },
     { key: 'vr_flip_y', label: 'Fix upside-down clicks', type: 'bool', help: 'Turn this off if pressing a button on the VR panel triggers the one above/below it.' },
+    { action: 'vr_check', label: 'Run VR check', help: 'Shows what SteamVR offers: headset, controllers, and whether the headset camera can be used.' },
   ] },
   { title: 'Data', items: [
     { key: 'site_url', label: 'MivimooseRips site', type: 'text', help: 'Card list and prices come from here.' },
@@ -653,6 +654,16 @@ document.addEventListener('click', async (e) => {
   if (t.matches('.pack-row .top')) return togglePack(t.closest('.pack-row'));
   if (d.test) return act('test_sound', { sound: d.test });
   if (d.removeScope) { return saveSetting('scope_sets', S.settings.scope_sets.filter((x) => x !== d.removeScope)).then(() => { renderSettings.built = false; renderSettings(); }); }
+  if (d.act === 'vr_check') {
+    toast('Checking SteamVR…', 'info', 2500);
+    const r = await api.get('/api/vr/check');
+    const dlg = $('#card-dialog');
+    const cam = r.camera_frame ? `<img src="/vr-camera-test.jpg?t=${Date.now()}" style="max-width:100%;border-radius:10px;margin-top:10px">` : '';
+    dlg.innerHTML = `<div class="dialog-head"><h2>VR check</h2><button class="btn btn-ghost" data-close>✕</button></div>
+      <pre style="white-space:pre-wrap;font-size:13px;max-height:50vh;overflow:auto;margin:0">${esc(JSON.stringify(r, null, 1))}</pre>${cam}`;
+    dlg.showModal();
+    return;
+  }
   if (d.act) {
     await act(d.act);
     if (d.act === 'reload_data') toast('Refreshing card data…');

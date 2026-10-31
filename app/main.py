@@ -53,14 +53,29 @@ def main(argv=None):
     ap.add_argument('--camera', help='camera override for this run, e.g. webcam:1 or file:C:\\video.mp4')
     ap.add_argument('--port', type=int)
     ap.add_argument('--data-dir', help='keep settings, collection and caches here')
+    ap.add_argument('--vr-check', action='store_true', help='report what SteamVR offers (headset, camera) and exit')
     args = ap.parse_args(argv)
 
     dd = args.data_dir or data_dir()
     os.makedirs(dd, exist_ok=True)
     _setup_logging(dd)
     log = logging.getLogger('main')
+    if args.vr_check:                                         # works while the app is running too
+        import json
+        from .vr import vr_check
+        rep = vr_check(dd)
+        out = os.path.join(dd, 'vr-check.json')
+        with open(out, 'w', encoding='utf-8') as f:
+            json.dump(rep, f, indent=1, default=str)
+        if sys.stdout is not None:
+            print(json.dumps(rep, indent=1, default=str))
+        return 0
     if not _single_instance(dd):
         return 0
+
+    import cv2
+    # A few threads are plenty for one camera's frames, and leave the CPU to the VR game.
+    cv2.setNumThreads(4)
 
     from . import hud
     from .carddb import CardDB
@@ -108,7 +123,9 @@ def main(argv=None):
                 pass
 
     web_dir = os.path.join(resource_dir(), 'web')
-    server = Server(App(engine, settings, db, store, refs, rates, bus, web_dir, quit_app), settings['port'], settings['lan'])
+    app = App(engine, settings, db, store, refs, rates, bus, web_dir, quit_app)
+    app.data_dir = dd
+    server = Server(app, settings['port'], settings['lan'])
     with open(os.path.join(dd, 'url.txt'), 'w', encoding='utf-8') as f:
         f.write(server.url)
     log.info('%s running at %s (data in %s)', APP_NAME, server.url, dd)

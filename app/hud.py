@@ -220,10 +220,19 @@ def hud(state: dict, fmt, images: ImageCache, camera_img: np.ndarray | None, toa
         ImageDraw.Draw(m).rounded_rectangle((0, 0, cam.size[0] - 1, cam.size[1] - 1), radius=10, fill=255)
         im.paste(cam, (cx + (240 - cam.size[0]) // 2, cy), m)
 
-    # toast
-    if toast and time.time() - toast['ts'] < 5:
+    # live line: a card being read (with progress), a tip, or the latest event
+    live = state.get('live') or {}
+    box = (x, 446, W - 28, 494)
+    if st == 'scanning' and live.get('pendingName') and live.get('progress', 0) > 0:
+        d.rounded_rectangle(box, radius=14, fill=PANEL2, outline=ACCENT, width=2)
+        _text(d, (x + 18, 470), f"Reading {live['pendingName']}…", font(24, 'semi'), TEXT, anchor='lm', max_w=W - x - 250)
+        _bar(d, W - 228, 463, 180, 14, live['progress'])
+    elif st == 'scanning' and live.get('hintText'):
+        d.rounded_rectangle(box, radius=14, fill=PANEL2, outline=ACCENT, width=2)
+        _text(d, (x + 18, 470), live['hintText'], font(24, 'semi'), ACCENT, anchor='lm', max_w=W - x - 70)
+    elif toast and time.time() - toast['ts'] < 5:
         tcol = {'good': GOOD, 'bad': BAD, 'hit': ACCENT}.get(toast.get('level'), BLUE)
-        d.rounded_rectangle((x, 446, W - 28, 494), radius=14, fill=PANEL2, outline=tcol, width=2)
+        d.rounded_rectangle(box, radius=14, fill=PANEL2, outline=tcol, width=2)
         _text(d, (x + 18, 470), toast['message'], font(24, 'semi'), TEXT, anchor='lm', max_w=W - x - 70)
 
     # buttons

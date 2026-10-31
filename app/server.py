@@ -115,6 +115,15 @@ class Handler(BaseHTTPRequestHandler):
                 return self.json({'cards': [c.to_dict() for c in cards]})
             if p == '/api/collection':
                 return self.json(self._collection(q))
+            if p == '/api/vr/check':
+                vr = a.engine.vr
+                return self.json(vr.check(a.data_dir) if vr else {'error': 'VR is not set up'})
+            if p == '/vr-camera-test.jpg':
+                f = os.path.join(a.data_dir, 'vr-camera-test.jpg')
+                if not os.path.exists(f):
+                    return self.error_json(404, 'no test frame')
+                with open(f, 'rb') as fh:
+                    return self._send(200, fh.read(), 'image/jpeg')
             if p == '/api/cameras':
                 vr = a.engine.vr
                 return self.json({'cameras': list_cameras(bool(vr and vr.connected))})

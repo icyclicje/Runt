@@ -36,6 +36,92 @@ def steamvr_running() -> bool:
         return False
 
 
+def vr_check(out_dir: str, system=None) -> dict:
+    """What SteamVR offers this app: headset, controllers, and whether its camera can be read.
+
+    Uses the given connection, or opens a temporary one in 'background' mode (which
+    never launches SteamVR). Saves a test camera frame to out_dir when one arrives.
+    """
+    import openvr
+    rep: dict = {'steamvr_running': steamvr_running(), 'connected': False}
+    own = False
+    try:
+        if system is None:
+            if not rep['steamvr_running']:
+                rep['error'] = 'SteamVR is not running'
+                return rep
+            system = openvr.init(openvr.VRApplication_Background)
+            own = True
+        rep['connected'] = True
+        hmd = openvr.k_unTrackedDeviceIndex_Hmd
+
+        def prop(fn, dev, p):
+            try:
+                return fn(dev, p)
+            except Exception as e:
+                return f'? ({e})'
+        rep['headset'] = {
+            'model': prop(system.getStringTrackedDeviceProperty, hmd, openvr.Prop_ModelNumber_String),
+            'maker': prop(system.getStringTrackedDeviceProperty, hmd, openvr.Prop_ManufacturerName_String),
+            'driver': prop(system.getStringTrackedDeviceProperty, hmd, openvr.Prop_TrackingSystemName_String),
+            'cameras': prop(system.getInt32TrackedDeviceProperty, hmd, openvr.Prop_NumCameras_Int32),
+            'camera_layout': prop(system.getInt32TrackedDeviceProperty, hmd, openvr.Prop_CameraFrameLayout_Int32),
+        }
+        rep['controllers'] = [i for i in range(openvr.k_unMaxTrackedDeviceCount)
+                              if system.getTrackedDeviceClass(i) == openvr.TrackedDeviceClass_Controller]
+        cam = openvr.VRTrackedCamera()
+        try:
+            rep['camera_present'] = bool(cam.hasCamera(hmd))
+        except Exception as e:
+            rep['camera_present'] = False
+            rep['camera_error'] = str(e)
+        if rep['camera_present']:
+            sizes = {}
+            for name, ft in (('distorted', openvr.VRTrackedCameraFrameType_Distorted),
+                             ('undistorted', openvr.VRTrackedCameraFrameType_Undistorted),
+                             ('max_undistorted', openvr.VRTrackedCameraFrameType_MaximumUndistorted)):
+                try:
+                    sizes[name] = cam.getCameraFrameSize(hmd, ft)
+                except Exception as e:
+                    sizes[name] = f'? ({e})'
+            rep['camera_sizes'] = sizes
+            try:
+                ft = openvr.VRTrackedCameraFrameType_Undistorted
+                w, h, size = cam.getCameraFrameSize(hmd, ft)
+                handle = cam.acquireVideoStreamingService(hmd)
+                buf = (ctypes.c_uint8 * size)()
+                hdr, t0 = None, time.time()
+                while time.time() - t0 < 4:
+                    try:
+                        hdr = cam.getVideoStreamFrameBuffer(handle, ft, buf, size)
+                        break
+                    except Exception as e:
+                        rep['camera_wait'] = str(e)
+                        time.sleep(0.05)
+                cam.releaseVideoStreamingService(handle)
+                if hdr is not None:
+                    fw, fh, bpp = hdr.nWidth or w, hdr.nHeight or h, hdr.nBytesPerPixel or 4
+                    img = np.frombuffer(buf, np.uint8, count=fw * fh * bpp).reshape(fh, fw, bpp)
+                    import cv2
+                    path = os.path.join(out_dir, 'vr-camera-test.jpg')
+                    cv2.imwrite(path, cv2.cvtColor(img, cv2.COLOR_RGBA2BGR) if bpp == 4 else img)
+                    rep['camera_frame'] = {'width': fw, 'height': fh, 'bytes_per_pixel': bpp, 'saved': path,
+                                           'mean_brightness': float(img[:, :, :3].mean())}
+                else:
+                    rep['camera_frame'] = None
+            except Exception as e:
+                rep['camera_error'] = str(e)
+    except Exception as e:
+        rep['error'] = str(e)
+    finally:
+        if own:
+            try:
+                openvr.shutdown()
+            except Exception:
+                pass
+    return rep
+
+
 def _mat34(rot: np.ndarray, pos) -> 'openvr.HmdMatrix34_t':
     import openvr
     m = openvr.HmdMatrix34_t()
@@ -76,6 +162,11 @@ class VRManager:
         images.on_ready = self.mark_dirty
         threading.Thread(target=self._run, name='vr', daemon=True).start()
 
+    def check(self, out_dir: str) -> dict:
+        rep = vr_check(out_dir, self.system if self.connected else None)
+        rep['app_status'] = self.status
+        return rep
+
     def info(self) -> dict:
         return {'connected': self.connected, 'status': self.status, 'camera': self.has_camera,
                 'enabled': self.settings['vr_enabled']}
@@ -108,13 +199,29 @@ class VRManager:
                     continue
             try:
                 self._tick()
+                self._errors = 0
             except Exception as e:
-                log.exception('VR loop error')
-                self._disconnect(f'SteamVR connection lost ({e})')
-                self._stop.wait(3.0)
+                # A drawing/placement problem shouldn't drop the whole connection; only a
+                # SteamVR that no longer answers does.
+                self._errors = getattr(self, '_errors', 0) + 1
+                if self._errors <= 3 or self._errors % 100 == 0:
+                    log.exception('VR loop error')
+                if not self._alive():
+                    self._disconnect(f'SteamVR connection lost ({e})')
+                    self._stop.wait(3.0)
+                else:
+                    self.status = f'Connected to SteamVR, but the panel hit an error: {e}'
+                    self._stop.wait(0.5)
             self._stop.wait(1 / 30)
         if self.connected:
             self._disconnect('closing')
+
+    def _alive(self) -> bool:
+        try:
+            self.ov.isDashboardVisible()
+            return steamvr_running()
+        except Exception:
+            return False
 
     def _connect(self):
         import openvr
@@ -143,7 +250,7 @@ class VRManager:
             self._register_manifest()
             log.info('connected to SteamVR (headset camera: %s)', self.has_camera)
             self.bus.emit('vr', **self.info())
-            self.engine.on_vr_change()
+            self._notify_engine()
         except Exception as e:
             log.warning('SteamVR connect failed: %s', e)
             self.status = f'Could not connect to SteamVR: {e}'
@@ -164,7 +271,14 @@ class VRManager:
         self.ov = self.system = None
         self.status = why
         self.bus.emit('vr', **self.info())
-        self.engine.on_vr_change()
+        self._notify_engine()
+
+    def _notify_engine(self):
+        """Let the engine switch cameras; its problems are not connection problems."""
+        try:
+            self.engine.on_vr_change()
+        except Exception:
+            log.exception('camera switch after SteamVR change failed')
 
     @staticmethod
     def _vec2(x, y):
@@ -224,6 +338,11 @@ class VRManager:
 
         self._place()
         now = time.time()
+        lv = self.engine.live()
+        sig = (lv.get('pendingName'), round(lv.get('progress', 0), 1), lv.get('hint'), len(lv.get('lockedNames', [])))
+        if sig != getattr(self, '_live_sig', None):          # reading progress or a tip changed
+            self._live_sig = sig
+            self._dirty = True
         if self.settings['hud_camera'] and self.engine.camera is not None:
             if now - getattr(self, '_last_cam', 0) > 1 / max(1, self.settings['hud_fps']):
                 self._dirty = True
@@ -325,7 +444,9 @@ class VRManager:
             # lies just above the controller, tilted back toward your face like a wrist display
             self.ov.setOverlayTransformTrackedDeviceRelative(h, idx, _mat34(_rot_x(-55), (0, 0.04, 0.09)))
         else:
-            poses = self.system.getDeviceToAbsoluteTrackingPose(openvr.TrackingUniverseStanding, 0, None)
+            # pyopenvr only fills an array it's given (passing None returns None)
+            poses = (openvr.TrackedDevicePose_t * openvr.k_unMaxTrackedDeviceCount)()
+            self.system.getDeviceToAbsoluteTrackingPose(openvr.TrackingUniverseStanding, 0, poses)
             hp = poses[openvr.k_unTrackedDeviceIndex_Hmd]
             if not hp.bPoseIsValid:
                 return

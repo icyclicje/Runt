@@ -1,10 +1,11 @@
-"""Makes a test video of cards being held up to a camera, one at a time.
+"""Makes a test video of cards being brought up to a camera, one at a time.
 
-usage: python -m tests.make_demo_video <cache_dir> <set_id> <out.mp4> [--cards 12] [--repeat 2]
+usage: python -m tests.make_demo_video <cache_dir> <set_id> <out.mp4> [--cards 11] [--hard]
 
-Each card is shown for ~1.5 s (with a little hand shake), then the frame is
-empty for ~0.6 s. With --repeat, the first card is shown again at the end,
-to check the scanner doesn't count it twice.
+Each card comes into view, is held ~1.2 s (with hand tremor), and is taken away
+(see synth2.py). After the distinct cards, the first card is shown again (it is
+then owned: a duplicate) and the last card again (already in the current pack:
+must be skipped). The expected order is written to <out.mp4>.txt.
 """
 from __future__ import annotations
 
@@ -17,8 +18,10 @@ import numpy as np
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from app.carddb import CardDB               # noqa: E402
+from tests import synth2                    # noqa: E402
 from tests.bench_vision import color_images  # noqa: E402
-from tests.synth import scene                # noqa: E402
+
+FPS = 20
 
 
 def main():
@@ -26,39 +29,39 @@ def main():
     ap.add_argument('cache')
     ap.add_argument('set_id')
     ap.add_argument('out')
-    ap.add_argument('--cards', type=int, default=12)
-    ap.add_argument('--fps', type=int, default=20)
+    ap.add_argument('--cards', type=int, default=11)
+    ap.add_argument('--hard', action='store_true')
+    ap.add_argument('--other', default='swsh12pt5', help='set whose art decorates the playmat')
     a = ap.parse_args()
 
     db = CardDB(a.cache)
     db.load(refresh='never')
-    cs = db.get_set(a.set_id)
     rng = np.random.default_rng(11)
-    cards = [c for c in cs.cards if c.img]
-    pick = [cards[i] for i in rng.choice(len(cards), a.cards, replace=False)]
-    imgs = color_images(pick)
-    order = [c.key for c in pick if c.key in imgs]
-    # The first card again (now owned from an earlier pack: a duplicate), then the
-    # last card again (already in the current pack: must be skipped).
+    cards = [c for c in db.get_set(a.set_id).cards if c.img]
+    imgs = color_images([cards[i] for i in rng.choice(len(cards), a.cards, replace=False)])
+    other = [c for c in db.get_set(a.other).cards if c.img][:6]
+    art = list(color_images(other).values())
+    order = list(imgs)
     order += [order[0], order[-1]]
-    w = cv2.VideoWriter(a.out, cv2.VideoWriter_fourcc(*'mp4v'), a.fps, (1280, 720))
-    bg = np.full((720, 1280, 3), 70, np.uint8)
+    scene = synth2.Scene(rng, art_pool=art, hard=a.hard)
+    w = cv2.VideoWriter(a.out, cv2.VideoWriter_fourcc(*'mp4v'), FPS, (scene.w, scene.h))
+    t = 0
     for key in order:
-        # one random pose per card, small shake frame to frame
-        seed = int(rng.integers(1 << 30))
-        for f in range(int(a.fps * 1.5)):
-            r = np.random.default_rng(seed)
-            frame, _ = scene(imgs[key], r, pool=())
-            dx, dy = rng.normal(0, 2, 2)
-            m = np.float32([[1, 0, dx], [0, 1, dy]])
-            frame = cv2.warpAffine(frame, m, (1280, 720), borderMode=cv2.BORDER_REPLICATE)
-            w.write(cv2.cvtColor(frame, cv2.COLOR_GRAY2BGR))
-        for f in range(int(a.fps * 0.6)):
-            w.write(bg)
+        look = synth2.CardLook(imgs[key], rng, hard=a.hard)
+        prev = None
+        for c, hgt, ang, persp, tilt, _ in synth2.handheld_path(rng, (scene.h, scene.w), hold_frames=24, hard=a.hard):
+            q = synth2.pose_quad(c, hgt, ang, persp)
+            vel = (0, 0) if prev is None else tuple(q.mean(0) - prev.mean(0))
+            prev = q
+            w.write(cv2.cvtColor(scene.render([(look, q, vel, tilt)], t=t / FPS), cv2.COLOR_GRAY2BGR))
+            t += 1
+        for _ in range(int(FPS * 0.5)):
+            w.write(cv2.cvtColor(scene.render([], t=t / FPS), cv2.COLOR_GRAY2BGR))
+            t += 1
     w.release()
     with open(a.out + '.txt', 'w', encoding='utf-8') as f:
         f.write('\n'.join(order))
-    print(f'wrote {a.out}: {len(order)} card showings ({len(set(order))} different)')
+    print(f'wrote {a.out}: {len(order)} card showings ({len(set(order))} different), {t} frames')
 
 
 if __name__ == '__main__':

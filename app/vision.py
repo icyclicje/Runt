@@ -1,12 +1,12 @@
-"""Card detection and recognition.
+"""Outline-based card finding, fingerprints and canon-to-canon verification.
 
-Pipeline for every camera frame:
-  1. find the card's outline (a 4-sided shape with a card's proportions),
-  2. straighten it into a fixed 200x280 greyscale image ("canon"),
-  3. turn that into a fingerprint vector that ignores lighting changes,
-  4. compare against the fingerprints of every card in the active sets with one
-     matrix multiply, and break near-ties with ORB keypoint matching.
+  find_cards()   card-shaped outlines in a frame (several edge passes, snapped
+                 onto the card's straight edges)
+  describe()     a lighting-independent fingerprint of a straightened card
+  Matcher        fingerprints of every card in the active sets, searched with one
+                 matrix multiply, plus ORB keypoint checks between straightened images
 
+detector.py combines this with keypoint matching over the whole frame.
 Everything works on greyscale, so the Steam Frame's monochrome cameras work
 the same as a colour webcam.
 """
@@ -177,12 +177,25 @@ def _refine_once(quad: np.ndarray, edge_pts: np.ndarray, band_frac: float) -> np
     return out.astype(np.float32)
 
 
-def find_cards(gray: np.ndarray, max_candidates: int = 5, min_area: float = 0.02):
+class EdgeMap:
+    """The frame's thin edge pixels (from find_cards), for snapping outlines from elsewhere onto real edges."""
+
+    def __init__(self, pts: np.ndarray, scale: float):
+        self.pts, self.scale = pts, scale
+
+    def snap(self, quad: np.ndarray) -> np.ndarray:
+        if self.pts is None or not len(self.pts):
+            return quad
+        return refine_quad(np.float32(quad) * self.scale, self.pts) / self.scale
+
+
+def find_cards(gray: np.ndarray, max_candidates: int = 5, min_area: float = 0.02, edges_out: list | None = None):
     """Card-shaped quads in the frame, best-looking first: [(quad in frame pixels, shape score)].
 
     Several edge passes are tried (contrast-adaptive, normal, strict) because no
     single threshold works for both a pale card on a pale table and a card on a
     busy background. The caller picks between candidates by how well they match.
+    edges_out: if given, an EdgeMap of the frame is appended to it.
     """
     h, w = gray.shape[:2]
     scale = 640.0 / max(h, w) if max(h, w) > 640 else 1.0
@@ -232,6 +245,8 @@ def find_cards(gray: np.ndarray, max_candidates: int = 5, min_area: float = 0.02
                 continue
             score = (qa / frame_area) ** 0.35 * fill * (1 - asp_err)
             cands.append((quad, score))
+    if edges_out is not None:
+        edges_out.append(EdgeMap(edge_pts, scale))
 
     cands.sort(key=lambda c: -c[1])
     out: list[tuple[np.ndarray, float]] = []
@@ -250,12 +265,6 @@ def find_cards(gray: np.ndarray, max_candidates: int = 5, min_area: float = 0.02
         if not _same_quad(r, q, 0.006 * max(sh, sw)):
             refined.append((q, s * 0.98))
     return [(q / scale, s) for q, s in refined]
-
-
-def find_card(gray: np.ndarray):
-    """Best-looking card quad by shape alone: (quad, score) or (None, 0)."""
-    c = find_cards(gray, 1)
-    return c[0] if c else (None, 0.0)
 
 
 # ---------------------------------------------------------------- fingerprints
@@ -311,13 +320,6 @@ def query_descriptors(gray: np.ndarray, quad: np.ndarray, expands=(1.0, 1.05)) -
         descs.append(describe(c))
         descs.append(describe(cv2.rotate(c, cv2.ROTATE_180)))
     return np.stack(descs), canon0
-
-
-def reference_canon(img: np.ndarray) -> np.ndarray:
-    """A downloaded card scan, as the same 200x280 greyscale image the camera side produces."""
-    img = flatten_alpha(img, 200)
-    g = to_gray(img)
-    return cv2.resize(g, (CANON_W, CANON_H), interpolation=cv2.INTER_AREA)
 
 
 # ---------------------------------------------------------------- verification
@@ -449,65 +451,3 @@ class Matcher:
                     inl = max(orb_inliers(q(False), rf), orb_inliers(q(True), rf))
             out.append((key, score, inl))
         return out
-
-
-class Recognition:
-    """What the recogniser saw in one frame.
-
-    score/margin come from the fingerprint search; inliers is the number of
-    keypoints that line up between the camera image and the chosen card's scan
-    (right card: usually 80-300; a different card: under ~15)."""
-    __slots__ = ('quad', 'source', 'key', 'score', 'margin', 'cands', 'canon', 'sharp', 'inliers', 'rows')
-
-    def __init__(self, quad, source, cands, canon, rows):
-        self.quad, self.source, self.cands, self.canon, self.rows = quad, source, cands, canon, rows
-        self.key, self.score = cands[0]
-        self.margin = cands[0][1] - cands[1][1] if len(cands) > 1 else 1.0
-        self.sharp = sharpness(canon)
-        self.inliers = 0
-
-
-def recognize(gray: np.ndarray, matcher: Matcher, mode: str = 'auto', guide_size: float = 0.8,
-              max_candidates: int = 5, verify_top: int = 3, min_score: float = 0.3) -> Recognition | None:
-    """Find and identify the card in a greyscale frame.
-
-    mode: 'auto' (find the card's outline), 'guide' (use the fixed guide box),
-    or 'both' (outline first, guide box as a fallback candidate).
-    Every candidate outline is matched and the best-matching one wins, so a
-    wrong outline (the card's inner frame, two cards merged) loses to the right
-    one. The top few cards are then checked keypoint by keypoint, and the one
-    with the most agreeing keypoints is the answer.
-    """
-    if not len(matcher):
-        return None
-    quads = []
-    if mode in ('auto', 'both'):
-        quads = [(q, 'edge', s) for q, s in find_cards(gray, max_candidates)]
-    if mode == 'guide' or (mode == 'both'):
-        quads.append((guide_quad(gray.shape, guide_size), 'guide', 0.0))
-    best, best_rank = None, -9.0
-    for q, src, geo in quads:
-        qd, canon = query_descriptors(gray, q, expands=(1.0,))
-        cands, rows = matcher.match(qd, 5, with_rows=True)
-        if not cands:
-            continue
-        rank = cands[0][1] + 0.04 * geo - (0.04 if src == 'guide' else 0.0)
-        if rank > best_rank:
-            best, best_rank = (q, src, cands, canon, rows), rank
-    if best is None:
-        return None
-    # the winning outline may be the card's inner frame: try it a little larger too
-    q, src, cands, canon, rows = best
-    q2 = expand_quad(q, 1.05)
-    qd2, canon2 = query_descriptors(gray, q2, expands=(1.0,))
-    cands2, rows2 = matcher.match(qd2, 5, with_rows=True)
-    if cands2 and cands2[0][1] > cands[0][1] + 0.01:
-        best = (q2, src, cands2, canon2, rows2)
-    r = Recognition(*best)
-    if r.score >= min_score and verify_top:
-        ver = matcher.verify(r.canon, r.cands, verify_top, rows=r.rows)
-        top = max(ver, key=lambda v: v[2])
-        r.inliers = top[2]
-        if top[0] != r.key and top[2] > ver[0][2]:
-            r.key, r.score = top[0], top[1]           # keypoints prefer another candidate
-    return r
