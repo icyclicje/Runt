@@ -5,7 +5,6 @@ import org.opencv.core.CvType
 import org.opencv.core.Mat
 import org.opencv.core.MatOfPoint2f
 import org.opencv.core.Rect
-import org.opencv.core.Scalar
 import org.opencv.core.Size
 import org.opencv.imgproc.Imgproc
 import kotlin.math.PI
@@ -157,35 +156,5 @@ object Fingerprint {
         val t = mat()
         Imgproc.threshold(canon, t, 249.0, 255.0, Imgproc.THRESH_BINARY)
         Core.countNonZero(t).toFloat() / max(1, canon.rows() * canon.cols())
-    }
-
-    /** A downloaded card scan as a straightened grey canon; transparent corners become mid-grey. */
-    fun referenceCanon(img: Mat): Mat = matScope {
-        val gray = mat()
-        when (img.channels()) {
-            4 -> {
-                val bg = Mat(img.size(), CvType.CV_8UC3, Scalar(200.0, 200.0, 200.0)).track()
-                val planes = ArrayList<Mat>()
-                Core.split(img, planes)
-                planes.forEach { it.track() }
-                val alpha = mat(); planes[3].convertTo(alpha, CvType.CV_32F, 1.0 / 255)
-                val rgb = mat(); Core.merge(planes.subList(0, 3), rgb)
-                val rgbF = mat(); rgb.convertTo(rgbF, CvType.CV_32FC3)
-                val bgF = mat(); bg.convertTo(bgF, CvType.CV_32FC3)
-                val a3 = mat(); Core.merge(listOf(alpha, alpha, alpha), a3)
-                val inv = mat(); Core.subtract(Mat.ones(a3.size(), a3.type()).track(), a3, inv)
-                val p1 = mat(); Core.multiply(rgbF, a3, p1)
-                val p2 = mat(); Core.multiply(bgF, inv, p2)
-                val sum = mat(); Core.add(p1, p2, sum)
-                val u8 = mat(); sum.convertTo(u8, CvType.CV_8UC3)
-                Imgproc.cvtColor(u8, gray, Imgproc.COLOR_BGR2GRAY)
-            }
-            3 -> Imgproc.cvtColor(img, gray, Imgproc.COLOR_BGR2GRAY)
-            else -> img.copyTo(gray)
-        }
-        val out = Mat()
-        val interp = if (gray.rows() >= CANON_H) Imgproc.INTER_AREA else Imgproc.INTER_CUBIC
-        Imgproc.resize(gray, out, Size(CANON_W.toDouble(), CANON_H.toDouble()), 0.0, 0.0, interp)
-        out
     }
 }

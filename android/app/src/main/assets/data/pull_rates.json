@@ -1,0 +1,1398 @@
+{
+ "swsh7": {
+  "rates": {
+   "Rare Holo V": 9.5,
+   "Rare Holo VMAX": 17.9,
+   "Rare Ultra": 26,
+   "Rare Rainbow": 88,
+   "Rare Secret": 109
+  },
+  "godPack": null,
+  "packsSampled": 8000,
+  "source": "https://www.tcgplayer.com/content/article/Pok%C3%A9mon-TCG-Evolving-Skies-Pull-Rates/6a743d7b-e5ee-4fd6-9d18-64a636990e8c/",
+  "confidence": "high",
+  "note": "TCGplayer Authentication Center, 8,000+ packs opened Aug 2021 (published 2024-08-27). Rare Ultra = full-art 2.78% (1/36) + alt-art V 1.10% (1/91); Rare Rainbow = rainbow 0.84% (1/118) + alt-art VMAX 0.30% (1/332) since pokemontcg.io labels alt-art VMAX \"Rare Rainbow\". Rare Holo not measured (packs.js 1/3 is an estimate). Unsourced in packs.js (not repeated here): Rare Holo.",
+  "changed": false
+ },
+ "swsh8": {
+  "rates": {
+   "Rare Holo VMAX": 30,
+   "Rare Ultra": 26,
+   "Rare Rainbow": 92,
+   "Rare Secret": 120
+  },
+  "godPack": null,
+  "packsSampled": 4000,
+  "source": "https://www.elitefourum.com/t/lost-origin-silver-tempest-fusion-strike-and-more-pull-rates/38824 (TCGplayer Infinite infographic \"Pull Rates for Fusion Strike\", Nov 2021, reposted in post #2)",
+  "confidence": "medium",
+  "note": "TCGplayer infographic, 4,000+ packs: Holo VMAX 1/30, full-art V 1/58, full-art Trainer 1/64, alt-art V 1/180, Rainbow 1/127, alt-art VMAX 1/332, Gold 1/120, any Ultra Rare-or-better 1/5. Rare Ultra = FA V + FA Trainer + alt-art V; Rare Rainbow = rainbow + alt-art VMAX (assumes pokemontcg.io labels alt VMAX \"Rare Rainbow\" as in Evolving Skies). Normal Rare Holo V and Rare Holo NOT measured: packs.js 1/9 and 1/3 are pullrates.com estimates. Unsourced in packs.js (not repeated here): Rare Holo, Rare Holo V.",
+  "changed": true
+ },
+ "swsh9": {
+  "rates": {
+   "Rare Holo V": 7.5,
+   "Rare Holo VSTAR": 53,
+   "Rare Holo VMAX": 77,
+   "Rare Ultra": 26,
+   "Rare Rainbow": 51,
+   "Rare Secret": 92,
+   "G:Trainer Gallery Rare Holo": 8,
+   "G:Rare Holo V|Rare Holo VMAX|Rare Holo VSTAR|Rare Ultra": 18,
+   "G:Rare Secret": 112
+  },
+  "godPack": null,
+  "packsSampled": 10000,
+  "source": "https://www.elitefourum.com/t/lost-origin-silver-tempest-fusion-strike-and-more-pull-rates/38824 (TCGplayer infographic \"Brilliant Stars Pull Rates\", 10,000+ packs) ; https://www.digitaltq.com/brilliant-stars-pull-rates-pokemon-tcg (1,004 packs)",
+  "confidence": "medium",
+  "note": "TCGplayer 10,000+ packs: main-set Gold 1/92, Rainbow 1/51, full-art Trainer 1/54; Trainer Gallery V/VMAX/Trainer 1/18, TG non-V 1/8 (also per-card: FA Charizard V 1/450, alt Charizard V 1/490, alt Arceus V 1/568, Marnie's Pride 1/309). TCGplayer gives no V/VSTAR/VMAX or all-Ultra-Rare rate, so those come from DigitalTQ's 1,004-pack tally (main set: V 134, VSTAR 19, VMAX 13, Ultra Rare #152-172 39, TG gold Urshifu 9). packs.js errors: Rare Ultra 54 was the full-art-Trainer-only rate; G:Rare Secret 309 was the single card Marnie's Pride; V 10 / VSTAR 30 / VMAX 200 / Rare Holo 3 were estimates. Unsourced in packs.js (not repeated here): Rare Holo.",
+  "changed": true
+ },
+ "swsh10": {
+  "rates": {
+   "Rare Holo V": 7.8,
+   "Rare Ultra": 25,
+   "Rare Rainbow": 78,
+   "Rare Secret": 130,
+   "G:Trainer Gallery Rare Holo": 11.8,
+   "G:Rare Holo V|Rare Holo VMAX|Rare Holo VSTAR|Rare Ultra": 24,
+   "Rare Holo VSTAR": 37,
+   "Rare Holo VMAX": 130
+  },
+  "godPack": null,
+  "packsSampled": 8000,
+  "source": "https://www.tcgplayer.com/content/article/Pok%C3%A9mon-TCG-Astral-Radiance-Pull-Rates/10da749f-9c8b-45c0-b80a-dbd86ca5dcde/",
+  "confidence": "high",
+  "note": "TCGplayer 8,000+ packs. VMAX+VSTAR combined 3.47% (1/29), split by main-set card count (7 VSTAR : 2 VMAX). Rare Ultra = FA V 2.13% + FA Trainer 1.08% + alt-art V 0.74%. Study does not break out Radiant Rares (packs.js 1/20 unsourced) or Rare Holo. Unsourced in packs.js (not repeated here): Rare Holo, Radiant Rare.",
+  "changed": false
+ },
+ "swsh11": {
+  "rates": {
+   "Rare Holo V": 8.6,
+   "Rare Ultra": 26,
+   "Radiant Rare": 20,
+   "Rare Rainbow": 78,
+   "Rare Secret": 131,
+   "G:Trainer Gallery Rare Holo": 12.1,
+   "G:Rare Holo V|Rare Holo VMAX|Rare Holo VSTAR|Rare Ultra": 32,
+   "G:Rare Secret": 117,
+   "Rare Holo VSTAR": 26,
+   "Rare Holo VMAX": 158
+  },
+  "godPack": null,
+  "packsSampled": 8000,
+  "source": "https://www.tcgplayer.com/content/article/Pok%C3%A9mon-TCG-Lost-Origin-Pull-Rates/ba20ac4d-9448-45ce-b919-d856d107c744/",
+  "confidence": "high",
+  "note": "TCGplayer 8,000+ packs. VMAX+VSTAR 4.42% split 6:1 by card count. G:Rare Secret = Trainer Gallery gold-and-black VMAX 0.86%. Rare Holo not measured. Unsourced in packs.js (not repeated here): Rare Holo.",
+  "changed": false
+ },
+ "swsh12": {
+  "rates": {
+   "Rare Holo V": 8.7,
+   "Rare Ultra": 27,
+   "Radiant Rare": 22,
+   "Rare Rainbow": 80,
+   "Rare Secret": 106,
+   "G:Trainer Gallery Rare Holo": 12.1,
+   "G:Rare Holo V|Rare Holo VMAX|Rare Holo VSTAR|Rare Ultra": 32,
+   "G:Rare Secret": 111,
+   "Rare Holo VSTAR": 31,
+   "Rare Holo VMAX": 188
+  },
+  "godPack": null,
+  "packsSampled": 8000,
+  "source": "https://www.tcgplayer.com/content/article/Pok%C3%A9mon-TCG-Silver-Tempest-Pull-Rates/6490d591-e582-4930-8446-00e190876d30/",
+  "confidence": "high",
+  "note": "TCGplayer 8,000+ packs. VMAX+VSTAR 3.72% split 6:1 by card count. Rare Holo not measured. Unsourced in packs.js (not repeated here): Rare Holo.",
+  "changed": false
+ },
+ "swsh12pt5": {
+  "rates": {
+   "Rare Holo V": 8.1,
+   "Rare Ultra": 35,
+   "Radiant Rare": 22,
+   "Rare Secret": 133,
+   "G:Trainer Gallery Rare Holo": 4.5,
+   "G:Rare Holo V|Rare Holo VMAX|Rare Holo VSTAR|Rare Ultra": 8.3,
+   "G:Rare Secret": 125,
+   "Rare Holo VSTAR": 31,
+   "Rare Holo VMAX": 49
+  },
+  "godPack": null,
+  "packsSampled": 1900,
+  "source": "https://www.tcgplayer.com/content/article/Pok%C3%A9mon-TCG-Crown-Zenith-Pull-Rates/56af3032-cb34-4da1-92fb-9cf206d10c0f/",
+  "confidence": "high",
+  "note": "TCGplayer 1,900+ packs. FIX: study gives VMAX+VSTAR COMBINED 5.30% (1/19); packs.js gives 1/19 to each (double counts). Split 8 VSTAR : 5 VMAX (main-set counts). Rare Ultra = texture Energy 1.90% + FA Trainer 0.95%. Galarian Gallery: non-V 22.4%, V/Trainer 12.0%, gold 0.8%. \"Signature Trainer\" 7.65% (1/13) covers only the 6 signature holo Supporters, not all 20 Rare Holo cards, so packs.js Rare Holo 13 is mis-applied (dropped here). Unsourced in packs.js (not repeated here): Rare Holo.",
+  "changed": true
+ },
+ "cel25": {
+  "rates": {
+   "Rare Holo V": 4.1,
+   "Rare Holo VMAX": 10.8,
+   "Rare Ultra": 26,
+   "G:*": 2.5
+  },
+  "godPack": null,
+  "packsSampled": 541,
+  "source": "https://www.digitaltq.com/celebrations-booster-pull-rates-pokemon-tcg",
+  "confidence": "low",
+  "note": "DigitalTQ per-card tally of 541 packs (cards per pack, a pack can hold 2): V cards #6/#8/#16/#18 = 132 (DigitalTQ mislabels Surfing Pikachu V and Zamazenta V as Rare Holo; pokemontcg.io has 4 Rare Holo V), VMAX 50, FA Professor's Research 21, Classic Collection 217 (40%), gold Mew #25 only 2 pulls (~1 in 270; pokemontcg.io labels it Rare Holo, so it has no rarity key of its own here; packs.js re-labels it Rare Secret by price and uses 1/167, unsourced). packs.js values (V 7, VMAX 13, CC 3) are pullrates.com estimates built on DigitalTQ's mislabelled V count. No large study exists. Unsourced in packs.js (not repeated here): Rare Secret.",
+  "changed": true
+ },
+ "pgo": {
+  "rates": {
+   "Rare Holo": 1.4,
+   "Rare Holo V": 6.3,
+   "Rare Ultra": 18.6,
+   "Radiant Rare": 18.6,
+   "Rare Holo VSTAR": 27,
+   "Rare Rainbow": 31,
+   "Rare Holo VMAX": 46,
+   "Rare Secret": 186
+  },
+  "godPack": null,
+  "packsSampled": 371,
+  "source": "https://www.digitaltq.com/pokemon-go-pull-rates-pokemon-tcg",
+  "confidence": "low",
+  "note": "DigitalTQ tally, 371 packs (Secret 2, VMAX 8, Rainbow 12, VSTAR 14, Ultra 20, Radiant 20, V 59, Holo 261). packs.js values match the same counts over ~396 packs (pullrates.com \"estimated\"). Every pack has a holo or better, so Rare Holo is the base pool. Small sample.",
+  "changed": true
+ },
+ "swsh35": {
+  "rates": {
+   "Rare Holo V": 6.4,
+   "Rare Holo VMAX": 30,
+   "Rare Ultra": 18.6,
+   "Rare Rainbow": 64,
+   "Rare Secret": 76
+  },
+  "godPack": null,
+  "packsSampled": 3192,
+  "source": "https://www.elitefourum.com/t/pull-rates-in-sun-moon-sword-shield-sets/25220",
+  "confidence": "medium",
+  "note": "Community tally of English opening videos (Elite Fourum \"Pull Rates in Sun & Moon - Sword & Shield Sets\", n=3,192): Ultra 5.39% (Pokemon FA 3.76% + Trainer FA 1.63%), Holo V 15.73%, VMAX 3.55%, Rainbow 1.57%, Secret 1.32% (shiny Charizard VMAX 1/228 + gold Bean Can 1/114). Replaces SERIES_RATES fallback.",
+  "changed": true
+ },
+ "swsh45": {
+  "rates": {
+   "Rare Holo V": 9.2,
+   "Rare Holo VMAX": 18.4,
+   "Amazing Rare": 17.4,
+   "Rare Ultra": 31,
+   "Rare Rainbow": 84,
+   "G:Rare Shiny": 4.4,
+   "G:Rare Holo V|Rare Holo VMAX": 11.2,
+   "G:Rare Secret": 109
+  },
+  "godPack": null,
+  "packsSampled": 2187,
+  "source": "https://www.elitefourum.com/t/pull-rates-in-sun-moon-sword-shield-sets/25220",
+  "confidence": "medium",
+  "note": "Elite Fourum community video tally, n=2,187. Shiny Vault (gallery): baby shiny 22.73%, shiny V/VMAX 8.96%, gold Eternatus V/VMAX (SV121-122, pokemontcg.io \"Rare Secret\") 0.91%. Main: Holo V 10.84%, VMAX 5.44%, Amazing 5.76%, Ultra 3.25% (mostly Trainer FA), Rainbow 1.19%. Shiny Vault total ~32.6% of packs vs packs.js gallery 0.3.",
+  "changed": true
+ },
+ "swsh4": {
+  "rates": {
+   "Rare Holo V": 7.9,
+   "Rare Holo VMAX": 23,
+   "Amazing Rare": 17.5,
+   "Rare Ultra": 25,
+   "Rare Rainbow": 79,
+   "Rare Secret": 90
+  },
+  "godPack": null,
+  "packsSampled": 630,
+  "source": "https://www.digitaltq.com/vivid-voltage-booster-pull-rates-pokemon-tcg",
+  "confidence": "low",
+  "note": "DigitalTQ tally of 630 packs (V 80, Amazing 36, VMAX 27, Ultra 25, Rainbow 8, Gold 7; card counts per rarity match the app). No large study; Elite Fourum thread has no Vivid Voltage data.",
+  "changed": true
+ },
+ "swsh1": {
+  "rates": {
+   "Rare Holo V": 7.0,
+   "Rare Holo VMAX": 45,
+   "Rare Ultra": 27,
+   "Rare Rainbow": 81,
+   "Rare Secret": 110
+  },
+  "godPack": null,
+  "packsSampled": 4628,
+  "source": "https://www.elitefourum.com/t/pull-rates-in-sun-moon-sword-shield-sets/25220",
+  "confidence": "medium",
+  "note": "Community tally of English opening videos (Elite Fourum, n=4,628; 95% CIs in source). Rare Ultra = Pokemon + Trainer full art; Rare Secret = gold. Replaces SERIES_RATES fallback.",
+  "changed": true
+ },
+ "swsh2": {
+  "rates": {
+   "Rare Holo V": 7.9,
+   "Rare Holo VMAX": 29,
+   "Rare Ultra": 27,
+   "Rare Rainbow": 67,
+   "Rare Secret": 105
+  },
+  "godPack": null,
+  "packsSampled": 2736,
+  "source": "https://www.elitefourum.com/t/pull-rates-in-sun-moon-sword-shield-sets/25220",
+  "confidence": "medium",
+  "note": "Community tally of English opening videos (Elite Fourum, n=2,736; 95% CIs in source). Rare Ultra = Pokemon + Trainer full art; Rare Secret = gold. Replaces SERIES_RATES fallback.",
+  "changed": true
+ },
+ "swsh3": {
+  "rates": {
+   "Rare Holo V": 8.0,
+   "Rare Holo VMAX": 26,
+   "Rare Ultra": 26,
+   "Rare Rainbow": 84,
+   "Rare Secret": 115
+  },
+  "godPack": null,
+  "packsSampled": 5040,
+  "source": "https://www.elitefourum.com/t/pull-rates-in-sun-moon-sword-shield-sets/25220",
+  "confidence": "medium",
+  "note": "Community tally of English opening videos (Elite Fourum, n=5,040; 95% CIs in source). Rare Ultra = Pokemon + Trainer full art; Rare Secret = gold. Replaces SERIES_RATES fallback.",
+  "changed": true
+ },
+ "sm1": {
+  "rates": {
+   "Rare Holo GX": 9.0,
+   "Rare Ultra": 24,
+   "Rare Rainbow": 68,
+   "Rare Secret": 123
+  },
+  "godPack": null,
+  "packsSampled": 7020,
+  "source": "https://www.elitefourum.com/t/pull-rates-in-sun-moon-sword-shield-sets/25220",
+  "confidence": "medium",
+  "note": "Community tally of English opening videos (Elite Fourum, n=7,020). Rare Ultra = full-art GX + full-art Trainer; Rare Secret = gold.",
+  "changed": true
+ },
+ "sm2": {
+  "rates": {
+   "Rare Holo GX": 9.0,
+   "Rare Ultra": 28,
+   "Rare Rainbow": 77,
+   "Rare Secret": 123
+  },
+  "godPack": null,
+  "packsSampled": 2088,
+  "source": "https://www.elitefourum.com/t/pull-rates-in-sun-moon-sword-shield-sets/25220",
+  "confidence": "medium",
+  "note": "Community tally of English opening videos (Elite Fourum, n=2,088). Rare Ultra = full-art GX + full-art Trainer; Rare Secret = gold.",
+  "changed": true
+ },
+ "sm3": {
+  "rates": {
+   "Rare Holo GX": 9.1,
+   "Rare Ultra": 25,
+   "Rare Rainbow": 63,
+   "Rare Secret": 106
+  },
+  "godPack": null,
+  "packsSampled": 2010,
+  "source": "https://www.elitefourum.com/t/pull-rates-in-sun-moon-sword-shield-sets/25220",
+  "confidence": "medium",
+  "note": "Community tally of English opening videos (Elite Fourum, n=2,010). Rare Ultra = full-art GX + full-art Trainer; Rare Secret = gold.",
+  "changed": true
+ },
+ "sm4": {
+  "rates": {
+   "Rare Holo GX": 12.1,
+   "Rare Ultra": 22,
+   "Rare Rainbow": 90,
+   "Rare Secret": 90
+  },
+  "godPack": null,
+  "packsSampled": 1530,
+  "source": "https://www.elitefourum.com/t/pull-rates-in-sun-moon-sword-shield-sets/25220",
+  "confidence": "medium",
+  "note": "Community tally of English opening videos (Elite Fourum, n=1,530). Rare Ultra = full-art GX + full-art Trainer; Rare Secret = gold.",
+  "changed": true
+ },
+ "sm5": {
+  "rates": {
+   "Rare Holo GX": 12.5,
+   "Rare Ultra": 23,
+   "Rare Rainbow": 67,
+   "Rare Secret": 129,
+   "Rare Prism Star": 11.5
+  },
+  "godPack": null,
+  "packsSampled": 1674,
+  "source": "https://www.elitefourum.com/t/pull-rates-in-sun-moon-sword-shield-sets/25220",
+  "confidence": "medium",
+  "note": "Community tally of English opening videos (Elite Fourum, n=1,674). Rare Ultra = full-art GX + full-art Trainer; Rare Secret = gold. Secret includes gold Pokemon 1/558.",
+  "changed": true
+ },
+ "sm6": {
+  "rates": {
+   "Rare Holo GX": 13.4,
+   "Rare Ultra": 28,
+   "Rare Rainbow": 74,
+   "Rare Secret": 140,
+   "Rare Prism Star": 12.6
+  },
+  "godPack": null,
+  "packsSampled": 1264,
+  "source": "https://www.elitefourum.com/t/pull-rates-in-sun-moon-sword-shield-sets/25220",
+  "confidence": "low",
+  "note": "Community tally of English opening videos (Elite Fourum, n=1,264). Rare Ultra = full-art GX + full-art Trainer; Rare Secret = gold.",
+  "changed": true
+ },
+ "sm7": {
+  "rates": {
+   "Rare Holo GX": 9.7,
+   "Rare Ultra": 26,
+   "Rare Rainbow": 82,
+   "Rare Secret": 114,
+   "Rare Prism Star": 18.3
+  },
+  "godPack": null,
+  "packsSampled": 1480,
+  "source": "https://www.elitefourum.com/t/pull-rates-in-sun-moon-sword-shield-sets/25220",
+  "confidence": "low",
+  "note": "Community tally of English opening videos (Elite Fourum, n=1,480). Rare Ultra = full-art GX + full-art Trainer; Rare Secret = gold.",
+  "changed": true
+ },
+ "sm75": {
+  "rates": {
+   "Rare Holo GX": 6.5,
+   "Rare Ultra": 14.4,
+   "Rare Rainbow": 43,
+   "Rare Secret": 130,
+   "Rare Prism Star": 9.3
+  },
+  "godPack": null,
+  "packsSampled": 389,
+  "source": "https://www.elitefourum.com/t/pull-rates-in-sun-moon-sword-shield-sets/25220",
+  "confidence": "low",
+  "note": "Community tally of English opening videos (Elite Fourum, n=389). Rare Ultra = full-art GX + full-art Trainer; Rare Secret = gold. Very small sample (389 packs).",
+  "changed": true
+ },
+ "sm8": {
+  "rates": {
+   "Rare Holo GX": 9.7,
+   "Rare Ultra": 23,
+   "Rare Rainbow": 75,
+   "Rare Secret": 98,
+   "Rare Prism Star": 8.2
+  },
+  "godPack": null,
+  "packsSampled": 1274,
+  "source": "https://www.elitefourum.com/t/pull-rates-in-sun-moon-sword-shield-sets/25220",
+  "confidence": "low",
+  "note": "Community tally of English opening videos (Elite Fourum, n=1,274). Rare Ultra = full-art GX + full-art Trainer; Rare Secret = gold.",
+  "changed": true
+ },
+ "sm9": {
+  "rates": {
+   "Rare Holo GX": 10.8,
+   "Rare Ultra": 21,
+   "Rare Rainbow": 97,
+   "Rare Secret": 145,
+   "Rare Prism Star": 16.8
+  },
+  "godPack": null,
+  "packsSampled": 872,
+  "source": "https://www.elitefourum.com/t/pull-rates-in-sun-moon-sword-shield-sets/25220",
+  "confidence": "low",
+  "note": "Community tally of English opening videos (Elite Fourum, n=872). Rare Ultra = full-art GX + full-art Trainer; Rare Secret = gold. Small sample.",
+  "changed": true
+ },
+ "sm10": {
+  "rates": {
+   "Rare Holo GX": 10.1,
+   "Rare Ultra": 24,
+   "Rare Rainbow": 72,
+   "Rare Secret": 111
+  },
+  "godPack": null,
+  "packsSampled": 3888,
+  "source": "https://www.elitefourum.com/t/pull-rates-in-sun-moon-sword-shield-sets/25220",
+  "confidence": "medium",
+  "note": "Community tally of English opening videos (Elite Fourum, n=3,888). Rare Ultra = full-art GX + full-art Trainer; Rare Secret = gold.",
+  "changed": true
+ },
+ "sm11": {
+  "rates": {
+   "Rare Holo GX": 7.9,
+   "Rare Ultra": 23,
+   "Rare Rainbow": 69,
+   "Rare Secret": 111
+  },
+  "godPack": null,
+  "packsSampled": 3672,
+  "source": "https://www.elitefourum.com/t/pull-rates-in-sun-moon-sword-shield-sets/25220",
+  "confidence": "medium",
+  "note": "Community tally of English opening videos (Elite Fourum, n=3,672). Rare Ultra = full-art GX + full-art Trainer; Rare Secret = gold.",
+  "changed": true
+ },
+ "sm12": {
+  "rates": {
+   "Rare Holo GX": 8.4,
+   "Rare Ultra": 27,
+   "Rare Rainbow": 67,
+   "Rare Secret": 9.1
+  },
+  "godPack": null,
+  "packsSampled": 3136,
+  "source": "https://www.elitefourum.com/t/pull-rates-in-sun-moon-sword-shield-sets/25220",
+  "confidence": "medium",
+  "note": "Community tally of English opening videos (Elite Fourum, n=3,136). Rare Ultra = full-art GX + full-art Trainer; Rare Secret = gold. Rare Secret = Character rares 1/9.89 (12 cards) + gold 1/112 (9 cards); one pooled rate over-weights the golds and under-weights the character cards.",
+  "changed": true
+ },
+ "sm35": {
+  "rates": {
+   "Rare Holo GX": 8.4,
+   "Rare Shining": 11.5,
+   "Rare Ultra": 25,
+   "Rare Rainbow": 67,
+   "Rare Secret": 110
+  },
+  "godPack": null,
+  "packsSampled": 1536,
+  "source": "https://www.elitefourum.com/t/pull-rates-in-sun-moon-sword-shield-sets/25220",
+  "confidence": "medium",
+  "note": "Elite Fourum community tally, n=1,536. \"Rare Shiny\" in the source = Shining Pokemon (app: Rare Shining). Rare Secret = \"Tube\" Mewtwo.",
+  "changed": true
+ },
+ "sm115": {
+  "rates": {
+   "Rare Holo GX": 6.6,
+   "Rare Ultra": 43,
+   "Rare Rainbow": 59,
+   "G:Rare Ultra": 39,
+   "G:Rare Secret": 56,
+   "G:Rare Shiny": 3.7,
+   "G:Rare Shiny GX": 8.8
+  },
+  "godPack": null,
+  "packsSampled": 1580,
+  "source": "https://www.elitefourum.com/t/pull-rates-in-sun-moon-sword-shield-sets/25220",
+  "confidence": "medium",
+  "note": "Elite Fourum community tally, n=1,580. Shiny Vault (gallery): Shiny 21.20%, Shiny GX 10.19%, gold SV87-SV94 1.77%. Trainer full arts (3.42%) are 2 main-set + 6 vault cards (SV81-86): split 2:6 by card count (derived). Main Rare Ultra = FA Moltres&Zapdos&Articuno-GX 1.46% + 2/8 of trainer FAs.",
+  "changed": true
+ },
+ "tcg-2409": {
+  "rates": {
+   "Rare Holo": 2.7
+  },
+  "godPack": null,
+  "packsSampled": 240,
+  "source": "https://www.elitefourum.com/t/pull-rates-in-sun-moon-sword-shield-sets/25220",
+  "confidence": "low",
+  "note": "Detective Pikachu: Elite Fourum tally, n=240 (tiny): holo in 37.08% of packs.",
+  "changed": true
+ },
+ "sv1": {
+  "rates": {
+   "Double Rare": 7.3,
+   "Ultra Rare": 15.2,
+   "Illustration Rare": 13.0,
+   "Special Illustration Rare": 32,
+   "Hyper Rare": 54
+  },
+  "godPack": null,
+  "packsSampled": 8000,
+  "source": "https://www.tcgplayer.com/content/article/Pok%C3%A9mon-TCG-Scarlet-Violet-Pull-Rates/a7702fce-dd64-4a58-beb1-0f871c853215/",
+  "confidence": "high",
+  "note": "TCGplayer Authentication Center, 8,000+ packs. N = 100/percent (1 decimal under 20); published \"1 in X\" kept for rare tiers. ",
+  "changed": false
+ },
+ "sv2": {
+  "rates": {
+   "Double Rare": 7.3,
+   "Ultra Rare": 15.1,
+   "Illustration Rare": 13.0,
+   "Special Illustration Rare": 32,
+   "Hyper Rare": 57
+  },
+  "godPack": null,
+  "packsSampled": 8000,
+  "source": "https://www.tcgplayer.com/content/article/Pok%C3%A9mon-TCG-Paldea-Evolved-Pull-Rates/1b7d3e70-9542-4a50-8692-1661e2316521/",
+  "confidence": "high",
+  "note": "TCGplayer Authentication Center, 8,000+ packs. N = 100/percent (1 decimal under 20); published \"1 in X\" kept for rare tiers. ",
+  "changed": false
+ },
+ "sv3": {
+  "rates": {
+   "Double Rare": 7.3,
+   "Ultra Rare": 15.1,
+   "Illustration Rare": 13.2,
+   "Special Illustration Rare": 32,
+   "Hyper Rare": 52
+  },
+  "godPack": null,
+  "packsSampled": 8000,
+  "source": "https://www.tcgplayer.com/content/article/Pok%C3%A9mon-TCG-Obsidian-Flames-Pull-Rates/e2a66999-a7b5-4621-9765-c9a132e04bd2/",
+  "confidence": "high",
+  "note": "TCGplayer Authentication Center, 8,000+ packs. N = 100/percent (1 decimal under 20); published \"1 in X\" kept for rare tiers. ",
+  "changed": false
+ },
+ "sv3pt5": {
+  "rates": {
+   "Double Rare": 7.5,
+   "Ultra Rare": 15.5,
+   "Illustration Rare": 11.8,
+   "Special Illustration Rare": 32,
+   "Hyper Rare": 51
+  },
+  "godPack": null,
+  "packsSampled": 1500,
+  "source": "https://www.tcgplayer.com/content/article/Pok%C3%A9mon-TCG-Scarlet-Violet%E2%80%94151-Pull-Rates/b237df74-fbb0-40d0-9e13-d69ee6e804d9/",
+  "confidence": "medium",
+  "note": "TCGplayer Authentication Center, 1,500+ packs. N = 100/percent (1 decimal under 20); published \"1 in X\" kept for rare tiers. Foil Energy 24.83% (1/4) not a rarity.",
+  "changed": false
+ },
+ "sv4": {
+  "rates": {
+   "Double Rare": 6.4,
+   "Ultra Rare": 15.1,
+   "Illustration Rare": 13.0,
+   "Special Illustration Rare": 47,
+   "Hyper Rare": 82
+  },
+  "godPack": null,
+  "packsSampled": 8000,
+  "source": "https://www.tcgplayer.com/content/article/Pok%C3%A9mon-TCG-Paradox-Rift-Pull-Rates/0b5fb648-38fc-4f61-a6af-57c2737b4a48/",
+  "confidence": "high",
+  "note": "TCGplayer Authentication Center, 8,000+ packs. N = 100/percent (1 decimal under 20); published \"1 in X\" kept for rare tiers. ",
+  "changed": false
+ },
+ "sv4pt5": {
+  "rates": {
+   "Double Rare": 6.3,
+   "Ultra Rare": 15.1,
+   "Shiny Rare": 3.9,
+   "Shiny Ultra Rare": 13.0,
+   "Illustration Rare": 13.9,
+   "Special Illustration Rare": 58,
+   "Hyper Rare": 62
+  },
+  "godPack": null,
+  "packsSampled": 1500,
+  "source": "https://www.tcgplayer.com/content/article/Pok%C3%A9mon-TCG-Paldean-Fates-Pull-Rates/23de3e93-0d0f-4ae0-abc4-13664f3001a3/",
+  "confidence": "medium",
+  "note": "TCGplayer Authentication Center, 1,500+ packs. N = 100/percent (1 decimal under 20); published \"1 in X\" kept for rare tiers. ",
+  "changed": false
+ },
+ "sv5": {
+  "rates": {
+   "Double Rare": 5.9,
+   "Ultra Rare": 15.0,
+   "ACE SPEC Rare": 20,
+   "Illustration Rare": 13.0,
+   "Special Illustration Rare": 86,
+   "Hyper Rare": 139
+  },
+  "godPack": null,
+  "packsSampled": 8000,
+  "source": "https://www.tcgplayer.com/content/article/Pok%C3%A9mon-TCG-Temporal-Forces-Pull-Rates/28c0ad22-00a4-428f-b22d-e7fee9ec50bc/",
+  "confidence": "high",
+  "note": "TCGplayer Authentication Center, 8,000+ packs. N = 100/percent (1 decimal under 20); published \"1 in X\" kept for rare tiers. FIX: Hyper Rare is 0.72% = 1 in 139 (packs.js has 188, copied from Surging Sparks).",
+  "changed": true
+ },
+ "sv6": {
+  "rates": {
+   "Double Rare": 5.9,
+   "Ultra Rare": 15.1,
+   "ACE SPEC Rare": 19.8,
+   "Illustration Rare": 12.9,
+   "Special Illustration Rare": 86,
+   "Hyper Rare": 146
+  },
+  "godPack": null,
+  "packsSampled": 8000,
+  "source": "https://www.tcgplayer.com/content/article/Pok%C3%A9mon-TCG-Twilight-Masquerade-Pull-Rates/f3eea967-e5fb-4108-8655-bb1c89587628/",
+  "confidence": "high",
+  "note": "TCGplayer Authentication Center, 8,000+ packs. N = 100/percent (1 decimal under 20); published \"1 in X\" kept for rare tiers. ",
+  "changed": false
+ },
+ "sv7": {
+  "rates": {
+   "Double Rare": 5.9,
+   "Ultra Rare": 14.8,
+   "ACE SPEC Rare": 20,
+   "Illustration Rare": 12.8,
+   "Special Illustration Rare": 90,
+   "Hyper Rare": 137
+  },
+  "godPack": null,
+  "packsSampled": 8000,
+  "source": "https://www.tcgplayer.com/content/article/Pok%C3%A9mon-TCG-Stellar-Crown-Pull-Rates/2c0743dd-dbd0-4504-9ff8-be5a72dd04d1/",
+  "confidence": "high",
+  "note": "TCGplayer Authentication Center, 8,000+ packs. N = 100/percent (1 decimal under 20); published \"1 in X\" kept for rare tiers. ",
+  "changed": false
+ },
+ "sv8": {
+  "rates": {
+   "Double Rare": 5.9,
+   "Ultra Rare": 14.8,
+   "ACE SPEC Rare": 19.9,
+   "Illustration Rare": 13.0,
+   "Special Illustration Rare": 87,
+   "Hyper Rare": 188
+  },
+  "godPack": null,
+  "packsSampled": 8000,
+  "source": "https://www.tcgplayer.com/content/article/Pok%C3%A9mon-TCG-Surging-Sparks-Pull-Rates/6ccfb6ab-f26a-4ce8-bab5-5f91c85ec70e/",
+  "confidence": "high",
+  "note": "TCGplayer Authentication Center, 8,000+ packs. N = 100/percent (1 decimal under 20); published \"1 in X\" kept for rare tiers. ",
+  "changed": false
+ },
+ "sv8pt5": {
+  "rates": {
+   "Double Rare": 6.1,
+   "Ultra Rare": 13.4,
+   "ACE SPEC Rare": 21,
+   "Special Illustration Rare": 45,
+   "Hyper Rare": 180
+  },
+  "godPack": 2000,
+  "packsSampled": 1200,
+  "source": "https://www.tcgplayer.com/content/article/Pok%C3%A9mon-TCG-Prismatic-Evolutions-Pull-Rates/d94889ea-f76a-4a13-b74d-5b0b071220a7/",
+  "confidence": "medium",
+  "note": "TCGplayer Authentication Center, 1,200+ packs. N = 100/percent (1 decimal under 20); published \"1 in X\" kept for rare tiers. Poke Ball foil 1/3 and Master Ball foil 1/20 are printings, not rarities. TCGplayer: the sample likely included two Demigod packs. God pack 1/2000 is a widely repeated community figure with no published tally (low); demigod ~1/600 (Misprint small sample; consistent with ~2 in TCGplayer's 1,200).",
+  "changed": false
+ },
+ "sv9": {
+  "rates": {
+   "Double Rare": 4.9,
+   "Ultra Rare": 15.3,
+   "Illustration Rare": 11.8,
+   "Special Illustration Rare": 86,
+   "Hyper Rare": 137
+  },
+  "godPack": null,
+  "packsSampled": 8000,
+  "source": "https://www.tcgplayer.com/content/article/Pok%C3%A9mon-TCG-Journey-Together-Pull-Rates/1b9f379f-97cb-45cc-b6f6-a1a070a422cd/",
+  "confidence": "high",
+  "note": "TCGplayer Authentication Center, 8,000+ packs. N = 100/percent (1 decimal under 20); published \"1 in X\" kept for rare tiers. FIX: Journey Together raised Double Rare to 20.29% (1 in 4.9) and IR to 8.50% (1 in 11.8); packs.js has 6 / 13, and SIR 90 / HR 150 vs measured 86 / 137.",
+  "changed": true
+ },
+ "sv10": {
+  "rates": {
+   "Double Rare": 5.0,
+   "Ultra Rare": 15.6,
+   "Illustration Rare": 12.1,
+   "Special Illustration Rare": 94,
+   "Hyper Rare": 149
+  },
+  "godPack": null,
+  "packsSampled": 8000,
+  "source": "https://www.tcgplayer.com/content/article/Pok%C3%A9mon-TCG-Destined-Rivals-Pull-Rates/43ba832e-44c9-45a4-ae2e-594df2defdda/",
+  "confidence": "high",
+  "note": "TCGplayer Authentication Center, 8,000+ packs. N = 100/percent (1 decimal under 20); published \"1 in X\" kept for rare tiers. FIX: Destined Rivals DR 19.83% (1 in 5.0), IR 8.29% (1 in 12.1), UR 6.39% (1 in 15.6), SIR 1 in 94, HR 1 in 149; packs.js has 6 / 13 / 15 / 86 / 188.",
+  "changed": true
+ },
+ "me1": {
+  "rates": {
+   "Double Rare": 4.8,
+   "Ultra Rare": 12.2,
+   "Illustration Rare": 9.2,
+   "Special Illustration Rare": 101,
+   "Mega Hyper Rare": 1260
+  },
+  "godPack": null,
+  "packsSampled": 5000,
+  "source": "https://www.tcgplayer.com/content/article/Pok%C3%A9mon-TCG-Mega-Evolution-Pull-Rates/40cbeedc-21ce-473b-aef1-74e3969d9f91/",
+  "confidence": "high",
+  "note": "TCGplayer Authentication Center, 5,000+ packs. N = 100/percent (1 decimal under 20); published \"1 in X\" kept for rare tiers. ",
+  "changed": false
+ },
+ "me2": {
+  "rates": {
+   "Double Rare": 4.8,
+   "Ultra Rare": 12.4,
+   "Illustration Rare": 9.1,
+   "Special Illustration Rare": 80,
+   "Mega Hyper Rare": 1260
+  },
+  "godPack": null,
+  "packsSampled": 5000,
+  "source": "https://www.tcgplayer.com/content/article/Pok%C3%A9mon-TCG-Phantasmal-Flames-Pull-Rates/9abae60d-b7fb-448f-874e-176f78d6a6ca/",
+  "confidence": "high",
+  "note": "TCGplayer Authentication Center, 5,000+ packs. N = 100/percent (1 decimal under 20); published \"1 in X\" kept for rare tiers. ",
+  "changed": false
+ },
+ "me2pt5": {
+  "rates": {
+   "Double Rare": 4.9,
+   "Ultra Rare": 21,
+   "Mega Attack Rare": 29,
+   "Illustration Rare": 8.9,
+   "Special Illustration Rare": 70,
+   "Mega Hyper Rare": 540
+  },
+  "godPack": null,
+  "packsSampled": 2000,
+  "source": "https://www.tcgplayer.com/content/article/Pok%C3%A9mon-TCG-Ascended-Heroes-Pull-Rates/60143d94-88a7-42ce-8e73-babd7b3fabd6/",
+  "confidence": "medium",
+  "note": "TCGplayer Authentication Center, 2,000+ packs. N = 100/percent (1 decimal under 20); published \"1 in X\" kept for rare tiers. FIX: Mega Attack Rare is 3.47% = 1 in 29 (packs.js has 300). Published table also misprints \"Any Ultra Rare 20.77%\"; the tier row (4.81%) is used.",
+  "changed": true
+ },
+ "me3": {
+  "rates": {
+   "Double Rare": 4.8,
+   "Ultra Rare": 11.7,
+   "Illustration Rare": 8.9,
+   "Special Illustration Rare": 81,
+   "Mega Hyper Rare": 1786
+  },
+  "godPack": null,
+  "packsSampled": 3500,
+  "source": "https://www.tcgplayer.com/content/article/Pok%C3%A9mon-TCG-Perfect-Order-Pull-Rates/73148119-ebcb-40b7-84b6-52b3a6d0c631/",
+  "confidence": "high",
+  "note": "TCGplayer Authentication Center, 3,500+ packs. N = 100/percent (1 decimal under 20); published \"1 in X\" kept for rare tiers. ",
+  "changed": false
+ },
+ "me4": {
+  "rates": {
+   "Double Rare": 4.9,
+   "Ultra Rare": 12.1,
+   "Illustration Rare": 9.4,
+   "Special Illustration Rare": 83,
+   "Mega Hyper Rare": 956
+  },
+  "godPack": null,
+  "packsSampled": 8500,
+  "source": "https://www.tcgplayer.com/content/article/Pok%C3%A9mon-TCG-Chaos-Rising-Pull-Rates/304e8bfc-175a-4d31-93fe-5bb1be11e5d2/",
+  "confidence": "high",
+  "note": "TCGplayer Authentication Center, 8,500+ packs. N = 100/percent (1 decimal under 20); published \"1 in X\" kept for rare tiers. ",
+  "changed": false
+ },
+ "me5": {
+  "rates": {
+   "Double Rare": 4.8,
+   "Ultra Rare": 12.0,
+   "Illustration Rare": 9.1,
+   "Special Illustration Rare": 80,
+   "Mega Hyper Rare": 1081
+  },
+  "godPack": null,
+  "packsSampled": 4000,
+  "source": "https://www.tcgplayer.com/content/article/Pok%C3%A9mon-TCG-Pitch-Black-Pull-Rates/069a5fda-2d1f-44a1-97de-b6dcdc5abfb8/",
+  "confidence": "high",
+  "note": "TCGplayer Authentication Center, 4,000+ packs. N = 100/percent (1 decimal under 20); published \"1 in X\" kept for rare tiers. ",
+  "changed": false
+ },
+ "zsv10pt5": {
+  "rates": {
+   "Double Rare": 4.7,
+   "Illustration Rare": 6.1,
+   "Ultra Rare": 17.2,
+   "Special Illustration Rare": 80,
+   "Black White Rare": 496
+  },
+  "godPack": 850,
+  "packsSampled": 700,
+  "source": "https://www.tcgplayer.com/content/article/Pok%C3%A9mon-TCG-Black-Bolt-and-White-Flare-Pull-Rates/bac92199-a2a7-4668-b4a4-2647a111776f/ ; https://pokepatch.com/2025/07/20/black-bolt-white-flare-pull-rates-in-pokemon-tcg-sets/ (BWR only)",
+  "confidence": "medium",
+  "note": "eBay Authentication Center via TCGplayer: 700+ packs, Black Bolt + White Flare combined (350+ each). No Black White Rare in the sample; BWR 1/496 is from Pokepatch (\"1,000+ community openings\", method unstated) - low confidence. Japanese SV11B/W BWR is 1 per 21.4 boxes (see ja-SV11B). Poke Ball foil 1/3 and Master Ball foil 1/19 are printings. God pack: only community estimates \"1 in 600\" to \"1 in 700-1,000\"; no tally (low).",
+  "changed": false
+ },
+ "rsv10pt5": {
+  "rates": {
+   "Double Rare": 4.7,
+   "Illustration Rare": 6.1,
+   "Ultra Rare": 17.2,
+   "Special Illustration Rare": 80,
+   "Black White Rare": 496
+  },
+  "godPack": 850,
+  "packsSampled": 700,
+  "source": "https://www.tcgplayer.com/content/article/Pok%C3%A9mon-TCG-Black-Bolt-and-White-Flare-Pull-Rates/bac92199-a2a7-4668-b4a4-2647a111776f/ ; https://pokepatch.com/2025/07/20/black-bolt-white-flare-pull-rates-in-pokemon-tcg-sets/ (BWR only)",
+  "confidence": "medium",
+  "note": "eBay Authentication Center via TCGplayer: 700+ packs, Black Bolt + White Flare combined (350+ each). No Black White Rare in the sample; BWR 1/496 is from Pokepatch (\"1,000+ community openings\", method unstated) - low confidence. Japanese SV11B/W BWR is 1 per 21.4 boxes (see ja-SV11B). Poke Ball foil 1/3 and Master Ball foil 1/19 are printings. God pack: only community estimates \"1 in 600\" to \"1 in 700-1,000\"; no tally (low).",
+  "changed": false
+ },
+ "me55": {
+  "rates": {
+   "Rare": 1.3,
+   "Double Rare": 4.8,
+   "Illustration Rare": 5.1,
+   "G:*": 9.9,
+   "Special Illustration Rare": 20,
+   "Futuristic Rare": 120
+  },
+  "godPack": null,
+  "packsSampled": 3000,
+  "source": "https://www.tcgplayer.com/content/article/Pok%C3%A9mon-TCG-30th-Celebration-Pull-Rates/587b3657-481a-4ab8-827c-68cd3ab585b0/ ; https://www.digitaltq.com/pokemon-tcg-30th-celebration-pull-rates (Rare only)",
+  "confidence": "high",
+  "note": "TCGplayer 3,000+ packs: DR 21.02% (1 in 4.8; packs.js 4), IR 19.72%, Classic Collection 10.15%, SIR 4.88%, Futuristic 0.83% (1/120, either card; 1/240 specific). RGB Rare: none in TCGplayer's 3,000+ or DigitalTQ's 420 packs, so packs.js 1/4000 has no source (dropped). Rare = non-ex rare holos: DigitalTQ 319 in 420 packs (low; packs.js 2 unsourced). Unsourced in packs.js (not repeated here): RGB Rare.",
+  "changed": true
+ },
+ "_ja_generic_regular": {
+  "rates": {
+   "Double Rare": 7.3,
+   "Illustration Rare": 10.0,
+   "Ultra Rare": 37.5,
+   "Special Illustration Rare": 150.0,
+   "Hyper Rare": 300.0,
+   "ACE SPEC Rare": 30.0
+  },
+  "godPack": null,
+  "packsSampled": null,
+  "source": "https://pokemon-infomation.com/pull-rates-crimsonhaze/ ; https://pokemon-infomation.com/pull-rates-battlepartner/ ; https://torecamap.co.jp/column/sv3/ ; https://pokecazilla.com/column/booster-box-rates/",
+  "confidence": "medium",
+  "note": "Scarlet & Violet regular/enhanced box 30 packs x 5: AR exactly 3, RR ~4 (4-5), \"SR or better\" 1 per box (SR ~75-80%, SAR ~15-20%, UR ~10%; SAR/UR take the SR slot), 2-hit boxes 5-10% (in a 2-hit box one R is dropped), ACE SPEC exactly 1 in sets that have it. PokeGet carton averages are pooled over ~8,000 (SV5a-SV7a) and ~15,000 (SV9-SV10) SV boxes. torecamap tallies put SAR (~15-25%) and UR (~5-9%) somewhat lower.",
+  "changed": true
+ },
+ "_ja_generic_regular_mega": {
+  "rates": {
+   "Double Rare": 7.3,
+   "Illustration Rare": 10.0,
+   "Ultra Rare": 16.7,
+   "Special Illustration Rare": 107.1,
+   "Mega Hyper Rare": 2000.0
+  },
+  "godPack": null,
+  "packsSampled": null,
+  "source": "https://pokemon-infomation.com/pull-rates-infernox/ ; https://pokemon-infomation.com/pull-rates-munikisuzero/ ; https://torecamap.co.jp/column/m2/",
+  "confidence": "medium",
+  "note": "MEGA regular box 30 packs x 5: Item/Tool/Stadium SR exactly 1 (separate slot) + SR(Pokemon/Supporter) ~80% + SAR ~28-34% + MUR ~1-2% per box (9-19 per 1,000 boxes by set; 1.5% used here), AR exactly 3, RR ~4. Ultra Rare here = all SR including the item SR.",
+  "changed": true
+ },
+ "_ja_generic_high_class": {
+  "rates": {
+   "Double Rare": 1.1
+  },
+  "godPack": 400,
+  "packsSampled": null,
+  "source": "https://pokemon-infomation.com/pull-rates-terafesex/ ; https://pokemon-infomation.com/pull-rates-megadreamex/ ; https://pokemon-infomation.com/pull-rates-shinytreasure/ ; https://torecamap.co.jp/column/m2a/",
+  "confidence": "low",
+  "note": "High-class box 10 packs x 10, 1 ex (RR) per pack (8-9 RR per box). Each high-class set guarantees exactly one of its signature hit per box (SV4a SSR, SV8a Pokemon SAR, M2a MA) and the SR/SAR/UR slot is NOT guaranteed (SV4a ~0.5/box, SV8a ~0.36/box beyond the guaranteed SAR, M2a ~0.5/box). Other rarities differ too much by set to generalise. God pack: PokeGet pooled ~10,000 high-class boxes -> 1 per 30-50 boxes (1 in 300-500 packs); torecamap measured MEGA Dream ex at 0.75%/box (1 in ~1,340 packs).",
+  "changed": true
+ },
+ "_ja_intl": {
+  "note": "Korean and Traditional Chinese (Taiwan/HK) print the same Japanese sets under the same codes and box formats: regular/enhanced boxes 30 packs x 5 (retail listings for KR Cyber Judge/Triplet Beat and TC Triplet Beat/Battle Partners/Glory of Team Rocket); KR and TC Pokemon Card 151 boxes are 20 packs (TC 7 cards/pack, same as JP). No language-specific pull-rate tallies were found for KR/TC, so the Japanese rates are the best available; no sourced KR god-pack difference was found. Thai and Indonesian share one structure (PokeGuardian 2019: Indonesian \"has the same set structure as Pokemon TCG Thailand\") and are printed in Japan; current Indonesian boxes are 30 packs x 5 (MA5I, SV9sI listings) and Indonesian MEGA Dream ex is 10 packs x 10. But many Indonesian (and some Thai) SV sets merge two Japanese sets: by the app's own printed counts id-SV3s (170 = SV3 108 + SV3a 62), id-SV4s (132 = SV4K + SV4M), id-SV5s (142 = SV5K + SV5M), id-SV7s / th-SV7s (166 = SV7 + SV7a), and probably id-SV6s, id-SV8s / th-SV8s, id-SV9s / th-SV9s. For merged sets the per-box structure is presumably the same but each rarity has about twice as many cards, so per-card odds roughly halve; no tallies found. Simplified Chinese (mainland) is a separate product line (CSV#C expansions, CBB Gem Packs, 151C Gathering/Journey/Hope/Surprise boxes) with different contents and formats, e.g. 151C Gathering standard box 15 packs x 5, jumbo box 6 packs x 20, Gem Pack 18 packs x 4 per retailer listings; third-party guides say SC boxes print per-card odds on the box (e.g. 1.81% per card, Gem Pack Vol.5) and do not guarantee an S/SAR the way JP/TC boxes do, so Japanese rates should not be used for SC. The app's zh-cn-SV7/SV8a/SV9 entries carry Traditional-character names, so they may really be TC prints.",
+  "source": "https://pokeguardian.com/348807_the-pokemon-company-has-launched-pokemon-tcg-for-indonesia ; https://plan.danawa.com/info/?nPlanSeq=13186 ; https://kream.co.kr/products/670175 ; https://www.tcghobby.com/zh-hk/products/chinese-version-pokemon-tcg-scarlet-violet-booster-box-triple-beat ; https://24h.pchome.com.tw/prod/DGBJQ9-1900J5OJ2 ; https://uptogo.com.tw/?p=1214838 ; https://pokeunlimited.com/products/pokemon-tcg-mega-shadow-threat-booster-box-indonesian ; https://pokeunlimited.com/products/pokemon-tcg-collect-151-gathering-standard-booster-box-simplified-chinese ; https://www.goodgamesbern.ch/pokemon/sets/sv3.5-pokemon-151/pokemon-151-gathering-151c-jumbo-box-simplified-chinese/?sl=en ; https://www.tcghobby.com/zh/blogs/news/pokemon-gem-pack-vol-7-release-date-highlights-exclusive-art-rares ; https://tcgtalk.com/guides/gem-volume-5-chinese-pull-rates",
+  "confidence": "low"
+ },
+ "ja-M2": {
+  "rates": {
+   "Double Rare": 7.3,
+   "Illustration rare": 10.0,
+   "Ultra Rare": 16.7,
+   "Special illustration rare": 107.1,
+   "Mega Hyper Rare": 1875.0
+  },
+  "godPack": null,
+  "packsSampled": 30000,
+  "source": "https://pokemon-infomation.com/pull-rates-infernox/ ; https://torecamap.co.jp/column/m2/ (Ninja Spinner page; RR count)",
+  "confidence": "medium",
+  "note": "Regular MEGA box 30 packs x 5. PokeGet tally of ~1000 boxes, per box: Item/Tool/Stadium SR exactly 1 (separate slot), SR(Pokemon/Supporter) ~80%, SAR ~28%, MUR 16 per 1,000 boxes, AR exactly 3, RR 4-5 (used ~4.1 measured by torecamap); 2-hit (3-hit counting the item SR) box ~1 per 12-box carton. Map: Ultra Rare = all SR incl. the item SR -> 1.8/box, Special illustration rare=SAR, Mega Hyper Rare=MUR, Double Rare=RR. MUR 16 in 1,000 boxes.",
+  "changed": true
+ },
+ "ja-M2a": {
+  "rates": {
+   "Double Rare": 1.1,
+   "Illustration rare": 3.3,
+   "Ultra Rare": 9.1,
+   "Mega Attack Rare": 10.0,
+   "Special illustration rare": 25.0,
+   "Mega Hyper Rare": 571.4
+  },
+  "godPack": 1340,
+  "packsSampled": 20000,
+  "source": "https://pokemon-infomation.com/pull-rates-megadreamex/ ; https://torecamap.co.jp/column/m2a/",
+  "confidence": "medium",
+  "note": "High-class box 10 packs x 10. PokeGet tally of 2,000 boxes: MA exactly 1/box (10 kinds; the guaranteed hit), item SR exactly 1/box (6), AR exactly 3 (20), RR 9, mirrors 7, SR 10% (3), SAR 40%/box (17; carton average 7 per 20 boxes = 35%), MUR 35 in 2,000 boxes. torecamap (~401 boxes): RR 900%, AR 300%, SR 11.97%, item SR 100%, MA 102%, SAR 36.41%, MUR 0.75%, god pack 0.75%/box. Map: Ultra Rare = item SR + SR (9 cards) -> 1.1/box, Mega Attack Rare=MA, Special illustration rare=SAR, Mega Hyper Rare=MUR, Double Rare=RR. God pack (AR + 5 MA + 4 SAR): torecamap measured ~1 in 133.7 boxes = 1 in ~1,340 packs (only ~3 hits); PokeGet's pooled high-class figure is 1 per 30-50 boxes (300-500 packs). Low confidence on the god pack.",
+  "changed": true
+ },
+ "ja-M3": {
+  "rates": {
+   "Double Rare": 7.3,
+   "Illustration rare": 10.0,
+   "Ultra Rare": 16.7,
+   "Special illustration rare": 107.1,
+   "Mega Hyper Rare": 2307.7
+  },
+  "godPack": null,
+  "packsSampled": 30000,
+  "source": "https://pokemon-infomation.com/pull-rates-munikisuzero/ ; https://torecamap.co.jp/column/m2/ (Ninja Spinner page; RR count)",
+  "confidence": "medium",
+  "note": "Regular MEGA box 30 packs x 5. PokeGet tally of ~1000 boxes, per box: Item/Tool/Stadium SR exactly 1 (separate slot), SR(Pokemon/Supporter) ~80%, SAR ~28%, MUR 13 per 1,000 boxes, AR exactly 3, RR 4-5 (used ~4.1 measured by torecamap); 2-hit (3-hit counting the item SR) box ~1 per 12-box carton. Map: Ultra Rare = all SR incl. the item SR -> 1.8/box, Special illustration rare=SAR, Mega Hyper Rare=MUR, Double Rare=RR. MUR 13 in 1,000 boxes.",
+  "changed": true
+ },
+ "ja-M4": {
+  "rates": {
+   "Double Rare": 7.3,
+   "Illustration rare": 10.0,
+   "Ultra Rare": 16.7,
+   "Special illustration rare": 107.1,
+   "Mega Hyper Rare": 2307.7
+  },
+  "godPack": null,
+  "packsSampled": 30000,
+  "source": "https://pokemon-infomation.com/pull-rates-ninjaspiner/ ; https://torecamap.co.jp/column/m2/ (Ninja Spinner page; RR count)",
+  "confidence": "medium",
+  "note": "Regular MEGA box 30 packs x 5. PokeGet tally of ~1000 boxes, per box: Item/Tool/Stadium SR exactly 1 (separate slot), SR(Pokemon/Supporter) ~80%, SAR ~28%, MUR 13 per 1,000 boxes, AR exactly 3, RR 4-5 (used ~4.1 measured by torecamap); 2-hit (3-hit counting the item SR) box ~1 per 12-box carton. Map: Ultra Rare = all SR incl. the item SR -> 1.8/box, Special illustration rare=SAR, Mega Hyper Rare=MUR, Double Rare=RR. MUR 13 in 1,000 boxes. torecamap (~444 boxes): RR 410.13%, SR(Pokemon/Supporter) 77.03%, item SR 100%, SAR 33.78%, MUR 0.90% (1 in 111 boxes).",
+  "changed": true
+ },
+ "ja-M5": {
+  "rates": {
+   "Double Rare": 7.3,
+   "Illustration rare": 10.0,
+   "Ultra Rare": 16.7,
+   "Special illustration rare": 107.1,
+   "Mega Hyper Rare": 3333.3
+  },
+  "godPack": null,
+  "packsSampled": 18000,
+  "source": "https://pokemon-infomation.com/pull-rates-abysseye/ ; https://torecamap.co.jp/column/m2/ (Ninja Spinner page; RR count)",
+  "confidence": "medium",
+  "note": "Regular MEGA box 30 packs x 5. PokeGet tally of ~600 boxes, per box: Item/Tool/Stadium SR exactly 1 (separate slot), SR(Pokemon/Supporter) ~80%, SAR ~28%, MUR 9 per 1,000 boxes, AR exactly 3, RR 4-5 (used ~4.1 measured by torecamap); 2-hit (3-hit counting the item SR) box ~1 per 12-box carton. Map: Ultra Rare = all SR incl. the item SR -> 1.8/box, Special illustration rare=SAR, Mega Hyper Rare=MUR, Double Rare=RR. Header says ~600 boxes surveyed but the MUR text says 9 MUR \"in 1,000 boxes\" (9/600 would be 1 in 2,000 packs).",
+  "changed": true
+ },
+ "ja-M6": {
+  "rates": {
+   "Double Rare": 7.3,
+   "Illustration rare": 10.0,
+   "Ultra Rare": 16.7,
+   "Special illustration rare": 96.1,
+   "Mega Hyper Rare": 1538.5
+  },
+  "godPack": null,
+  "packsSampled": null,
+  "source": "https://torecamap.co.jp/column/m3/ (Storm Emeralda page) ; https://cardchusen.com/guide/pokeka-fuunyuritsu",
+  "confidence": "low",
+  "note": "Regular MEGA box 30 packs x 5. torecamap own survey (sample not stated; percentages imply ~205 boxes): RR 409.47%/box, AR 300%, item SR 100%, SR(Pokemon/Supporter) 79.51%, SAR 31.22% (1 in 3.3 boxes), MUR 1.95% (1 in 51.3 boxes). cardchusen reports SAR \"about 1 per 6 boxes\" for this set (no sample). PokeGet has no rate page for this set yet. Same mapping as the other M sets.",
+  "changed": true
+ },
+ "ja-M6a": {
+  "rates": {
+   "Pikachu Rare": 1.0,
+   "Double Rare": 4.0,
+   "Illustration rare": 5.0,
+   "Classic Collection": 10.0,
+   "Special illustration rare": 20.0,
+   "Futuristic Rare": 120.0
+  },
+  "godPack": null,
+  "packsSampled": 14400,
+  "source": "https://pokemon-infomation.com/pull-rates-30th/ ; https://tokyocardreport.com/articles/jp-box-guaranteed-pulls/",
+  "confidence": "low",
+  "note": "Box 20 packs x 6; every pack has 1 special-foil Pikachu + 1 basic Energy (publisher-stated). PokeGet ~720 boxes (early; the page also says its figures came from official accounts' opening videos with few trials): per box RR 5, AR 4, Classic Collection reprint 2, SAR 1 (1 per box in practice, not officially guaranteed), FUR ~1 per 6 boxes (2 kinds; the app lists 10 Futuristic Rare cards). RGB Rare and god pack: not yet surveyed. Matches the current packs.js ja-M6a entry except SAR 1 in 20 (vs 21).",
+  "changed": true
+ },
+ "ja-SV10": {
+  "rates": {
+   "Double Rare": 7.3,
+   "Illustration rare": 10.0,
+   "Ultra Rare": 37.5,
+   "Special illustration rare": 150.0,
+   "Hyper rare": 300.0
+  },
+  "godPack": null,
+  "packsSampled": 30000,
+  "source": "https://pokemon-infomation.com/pull-rates-rocketdaneikou/ ; https://torecamap.co.jp/column/sv3/ (RR count)",
+  "confidence": "medium",
+  "note": "Regular box 30 packs x 5. PokeGet tally of 1000 boxes, per box: SR(Pokemon) 50% + SR(Supporter) 30%, SAR 20%, UR 10%, AR exactly 3, RR 4-5 (RR rate here uses torecamap's measured ~4.1/box). \"SR or better\" exactly 1 per box in practice (SAR/UR take the SR slot), 2-hit boxes ~1 per 12-box carton, rare 0-hit error boxes. Map: Ultra Rare=SR (Pokemon+Supporter), Illustration rare=AR, Special illustration rare=SAR, Hyper rare=gold UR, Double Rare=RR. No ACE SPEC in this set.",
+  "changed": true
+ },
+ "ja-SV11B": {
+  "rates": {
+   "Illustration rare": 5.0,
+   "Ultra Rare": 24.2,
+   "Special illustration rare": 81.6,
+   "Black White Rare": 428.3
+  },
+  "godPack": null,
+  "packsSampled": null,
+  "source": "https://torecamap.co.jp/column/sv11b/ ; https://pokemon-infomation.com/cardlist-blackbolt/",
+  "confidence": "low",
+  "note": "Box 20 packs x 7 (290 yen/pack, per pokemon-infomation.com card list). torecamap own survey (sample not stated; percentages imply ~257 boxes; identical figures on the SV11B and SV11W pages): AR ~4/box (72 kinds), SR 82.8%/box, SAR 24.51% (1 in 4.1 boxes), BWR 4.67% (1 in 21.4 boxes), Master Ball mirror 1/box. No sourced RR or god-pack rate. Map: Illustration rare=AR, Ultra Rare=SR, Special illustration rare=SAR, Black White Rare=BWR.",
+  "changed": true
+ },
+ "ja-SV11W": {
+  "rates": {
+   "Illustration rare": 5.0,
+   "Ultra Rare": 24.2,
+   "Special illustration rare": 81.6,
+   "Black White Rare": 428.3
+  },
+  "godPack": null,
+  "packsSampled": null,
+  "source": "https://torecamap.co.jp/column/sv11w/ ; https://pokemon-infomation.com/cardlist-blackbolt/",
+  "confidence": "low",
+  "note": "Box 20 packs x 7 (290 yen/pack, per pokemon-infomation.com card list). torecamap own survey (sample not stated; percentages imply ~257 boxes; identical figures on the SV11B and SV11W pages): AR ~4/box (72 kinds), SR 82.8%/box, SAR 24.51% (1 in 4.1 boxes), BWR 4.67% (1 in 21.4 boxes), Master Ball mirror 1/box. No sourced RR or god-pack rate. Map: Illustration rare=AR, Ultra Rare=SR, Special illustration rare=SAR, Black White Rare=BWR.",
+  "changed": true
+ },
+ "ja-SV1S": {
+  "rates": {
+   "Double rare": 7.3,
+   "Illustration rare": 10.0,
+   "Ultra Rare": 40.0,
+   "Special illustration rare": 200.0,
+   "Hyper rare": 300.0
+  },
+  "godPack": null,
+  "packsSampled": 15000,
+  "source": "https://pokemon-infomation.com/pull-rates-scarletex/ ; https://torecamap.co.jp/column/sv3/ (RR count)",
+  "confidence": "medium",
+  "note": "Regular box 30 packs x 5. PokeGet tally of 500 boxes, per box: SR(Pokemon) 45% + SR(Supporter) 30%, SAR 15%, UR 10%, AR exactly 3, RR 4-5 (RR rate here uses torecamap's measured ~4.1/box). \"SR or better\" exactly 1 per box in practice (SAR/UR take the SR slot), 2-hit boxes ~10%, rare 0-hit error boxes. Map: Ultra Rare=SR (Pokemon+Supporter), Illustration rare=AR, Special illustration rare=SAR, Hyper rare=gold UR, Double rare=RR.",
+  "changed": true
+ },
+ "ja-SV1V": {
+  "rates": {
+   "Double rare": 7.3,
+   "Illustration rare": 10.0,
+   "Ultra Rare": 40.0,
+   "Special illustration rare": 150.0,
+   "Hyper rare": 300.0
+  },
+  "godPack": null,
+  "packsSampled": 15000,
+  "source": "https://pokemon-infomation.com/pull-rates-violetex/ ; https://torecamap.co.jp/column/sv3/ (RR count)",
+  "confidence": "medium",
+  "note": "Regular box 30 packs x 5. PokeGet tally of 500 boxes, per box: SR(Pokemon) 45% + SR(Supporter) 30%, SAR 20%, UR 10%, AR exactly 3, RR 4-5 (RR rate here uses torecamap's measured ~4.1/box). \"SR or better\" exactly 1 per box in practice (SAR/UR take the SR slot), 2-hit boxes ~5%, rare 0-hit error boxes. Map: Ultra Rare=SR (Pokemon+Supporter), Illustration rare=AR, Special illustration rare=SAR, Hyper rare=gold UR, Double rare=RR.",
+  "changed": true
+ },
+ "ja-SV1a": {
+  "rates": {
+   "Double rare": 7.3,
+   "Illustration rare": 10.0,
+   "Ultra Rare": 40.0,
+   "Special illustration rare": 150.0,
+   "Hyper rare": 300.0
+  },
+  "godPack": null,
+  "packsSampled": 30000,
+  "source": "https://pokemon-infomation.com/pull-rates-tripletbeat/ ; https://torecamap.co.jp/column/sv3/ (RR count)",
+  "confidence": "medium",
+  "note": "Regular box 30 packs x 5. PokeGet tally of 1000 boxes, per box: SR(Pokemon) 45% + SR(Supporter) 30%, SAR 20%, UR 10%, AR exactly 3, RR 4-5 (RR rate here uses torecamap's measured ~4.1/box). \"SR or better\" exactly 1 per box in practice (SAR/UR take the SR slot), 2-hit boxes ~5%, rare 0-hit error boxes. Map: Ultra Rare=SR (Pokemon+Supporter), Illustration rare=AR, Special illustration rare=SAR, Hyper rare=gold UR, Double rare=RR.",
+  "changed": true
+ },
+ "ja-SV2D": {
+  "rates": {
+   "Double rare": 7.3,
+   "Illustration rare": 10.0,
+   "Ultra Rare": 37.5,
+   "Special illustration rare": 150.0,
+   "Hyper rare": 300.0
+  },
+  "godPack": null,
+  "packsSampled": 30000,
+  "source": "https://pokemon-infomation.com/pull-rates-clayburst/ ; https://torecamap.co.jp/column/sv3/ (RR count)",
+  "confidence": "medium",
+  "note": "Regular box 30 packs x 5. PokeGet tally of 1000 boxes, per box: SR(Pokemon) 60% + SR(Supporter) 20%, SAR 20%, UR 10%, AR exactly 3, RR 4-5 (RR rate here uses torecamap's measured ~4.1/box). \"SR or better\" exactly 1 per box in practice (SAR/UR take the SR slot), 2-hit boxes ~5%, rare 0-hit error boxes. Map: Ultra Rare=SR (Pokemon+Supporter), Illustration rare=AR, Special illustration rare=SAR, Hyper rare=gold UR, Double rare=RR.",
+  "changed": true
+ },
+ "ja-SV2P": {
+  "rates": {
+   "Double rare": 7.3,
+   "Illustration rare": 10.0,
+   "Ultra Rare": 37.5,
+   "Special illustration rare": 150.0,
+   "Hyper rare": 300.0
+  },
+  "godPack": null,
+  "packsSampled": 30000,
+  "source": "https://pokemon-infomation.com/pull-rates-snowhazard/ ; https://torecamap.co.jp/column/sv3/ (RR count)",
+  "confidence": "medium",
+  "note": "Regular box 30 packs x 5. PokeGet tally of 1000 boxes, per box: SR(Pokemon) 60% + SR(Supporter) 20%, SAR 20%, UR 10%, AR exactly 3, RR 4-5 (RR rate here uses torecamap's measured ~4.1/box). \"SR or better\" exactly 1 per box in practice (SAR/UR take the SR slot), 2-hit boxes ~5%, rare 0-hit error boxes. Map: Ultra Rare=SR (Pokemon+Supporter), Illustration rare=AR, Special illustration rare=SAR, Hyper rare=gold UR, Double rare=RR.",
+  "changed": true
+ },
+ "ja-SV2a": {
+  "rates": {
+   "Double rare": 2.9,
+   "Illustration rare": 6.7,
+   "Ultra Rare": 25.0,
+   "Special illustration rare": 100.0,
+   "Mega Hyper Rare": 200.0
+  },
+  "godPack": 600,
+  "packsSampled": 19200,
+  "source": "https://pokemon-infomation.com/pull-rates-pokemoncard151/ ; https://torecamap.co.jp/column/sv2a/",
+  "confidence": "medium",
+  "note": "Box 20 packs x 7. PokeGet tally of 960 boxes: AR exactly 3/box, SR(Pokemon) 60% + SR(Supporter) 20%, SAR 20%, UR 10% per box, 2-hit boxes ~10%, Master Ball mirror exactly 1/box, Poke Ball mirrors ~16/box. RR: PokeGet says 4-5/box; used torecamap's count 694.44%/box (~750 RR in ~108 boxes). torecamap also measured SR 79.63%, SAR 23.15% (1 in 4.3 boxes), UR 5.56% (1 in 18 boxes). God pack (starter-line ARs + 2 SARs): PokeGet ESTIMATE \"about 1 per 2-3 cartons\" (12-box cartons) = 1 in 480-720 packs, not measured; 600 = midpoint, low confidence. Map: Ultra Rare=SR, Special illustration rare=SAR, Mega Hyper Rare=gold UR (3 cards), Double rare=RR.",
+  "changed": true
+ },
+ "ja-SV3": {
+  "rates": {
+   "Double rare": 7.3,
+   "Illustration rare": 10.0,
+   "Ultra Rare": 40.0,
+   "Special illustration rare": 150.0,
+   "Hyper rare": 300.0
+  },
+  "godPack": null,
+  "packsSampled": 18000,
+  "source": "https://pokemon-infomation.com/pull-rates-kokuennoshihaisha/ ; https://torecamap.co.jp/column/sv3/ (RR count)",
+  "confidence": "medium",
+  "note": "Regular box 30 packs x 5. PokeGet tally of 600 boxes, per box: SR(Pokemon) 50% + SR(Supporter) 25%, SAR 20%, UR 10%, AR exactly 3, RR 4-5 (RR rate here uses torecamap's measured ~4.1/box). \"SR or better\" exactly 1 per box in practice (SAR/UR take the SR slot), 2-hit boxes ~10%, rare 0-hit error boxes. Map: Ultra Rare=SR (Pokemon+Supporter), Illustration rare=AR, Special illustration rare=SAR, Hyper rare=gold UR, Double rare=RR. Second tally (torecamap, own survey, sample not stated): RR 408.33%/box, AR 300%, SR 78.8%, SAR ~24.9%, UR 5.07% (1 in 19.7 boxes), i.e. UR about half of PokeGet's.",
+  "changed": true
+ },
+ "ja-SV3a": {
+  "rates": {
+   "Double rare": 7.3,
+   "Illustration rare": 10.0,
+   "Ultra Rare": 40.0,
+   "Special illustration rare": 150.0,
+   "Hyper rare": 300.0
+  },
+  "godPack": null,
+  "packsSampled": 18000,
+  "source": "https://pokemon-infomation.com/pull-rates-ragingsurf/ ; https://torecamap.co.jp/column/sv3/ (RR count)",
+  "confidence": "medium",
+  "note": "Regular box 30 packs x 5. PokeGet tally of 600 boxes, per box: SR(Pokemon) 45% + SR(Supporter) 30%, SAR 20%, UR 10%, AR exactly 3, RR 4-5 (RR rate here uses torecamap's measured ~4.1/box). \"SR or better\" exactly 1 per box in practice (SAR/UR take the SR slot), 2-hit boxes ~10%, rare 0-hit error boxes. Map: Ultra Rare=SR (Pokemon+Supporter), Illustration rare=AR, Special illustration rare=SAR, Hyper rare=gold UR, Double rare=RR.",
+  "changed": true
+ },
+ "ja-SV4K": {
+  "rates": {
+   "Double rare": 7.3,
+   "Illustration rare": 10.0,
+   "Ultra Rare": 37.5,
+   "Special illustration rare": 150.0,
+   "Hyper rare": 300.0
+  },
+  "godPack": null,
+  "packsSampled": 18000,
+  "source": "https://pokemon-infomation.com/pull-rates-kodainohoko/ ; https://torecamap.co.jp/column/sv3/ (RR count)",
+  "confidence": "medium",
+  "note": "Regular box 30 packs x 5. PokeGet tally of 600 boxes, per box: SR(Pokemon) 55% + SR(Supporter) 25%, SAR 20%, UR 10%, AR exactly 3, RR 4-5 (RR rate here uses torecamap's measured ~4.1/box). \"SR or better\" exactly 1 per box in practice (SAR/UR take the SR slot), 2-hit boxes ~10%, rare 0-hit error boxes. Map: Ultra Rare=SR (Pokemon+Supporter), Illustration rare=AR, Special illustration rare=SAR, Hyper rare=gold UR, Double rare=RR.",
+  "changed": true
+ },
+ "ja-SV4M": {
+  "rates": {
+   "Double rare": 7.3,
+   "Illustration rare": 10.0,
+   "Ultra Rare": 37.5,
+   "Special illustration rare": 150.0,
+   "Hyper rare": 300.0
+  },
+  "godPack": null,
+  "packsSampled": 18000,
+  "source": "https://pokemon-infomation.com/pull-rates-mirainoissen/ ; https://torecamap.co.jp/column/sv3/ (RR count)",
+  "confidence": "medium",
+  "note": "Regular box 30 packs x 5. PokeGet tally of 600 boxes, per box: SR(Pokemon) 55% + SR(Supporter) 25%, SAR 20%, UR 10%, AR exactly 3, RR 4-5 (RR rate here uses torecamap's measured ~4.1/box). \"SR or better\" exactly 1 per box in practice (SAR/UR take the SR slot), 2-hit boxes ~10%, rare 0-hit error boxes. Map: Ultra Rare=SR (Pokemon+Supporter), Illustration rare=AR, Special illustration rare=SAR, Hyper rare=gold UR, Double rare=RR.",
+  "changed": true
+ },
+ "ja-SV4a": {
+  "rates": {
+   "Double rare": 1.2,
+   "Illustration rare": 3.3,
+   "Ultra Rare": 7.7,
+   "Special illustration rare": 100.0,
+   "Hyper rare": 100.0
+  },
+  "godPack": 400,
+  "packsSampled": 10000,
+  "source": "https://pokemon-infomation.com/pull-rates-shinytreasure/ ; https://torecamap.co.jp/column/sv4a/",
+  "confidence": "medium",
+  "note": "High-class box 10 packs x 10. PokeGet tally of 1,000 boxes: SSR exactly 1/box (18 kinds; the guaranteed hit), S ~2.9/box (3, or 2 + 1 AR), AR ~10%/box (4 kinds), SR 30% (5 trainer SR), SAR 10% (8), UR 10% (6), RR 8-9/box. torecamap: S 300%, SSR 100%, SR 31.82%, AR 9.0%, SAR 12.0%, UR 8.0% per box. Map (by counts): Illustration rare (131) = S (129) + AR -> S+AR 3.0/box; Ultra Rare (30) = SSR (18) + SR (5) + a few others -> 1.3/box; Special illustration rare holds 6 of the 8 SAR and Hyper rare 3 of the 6 UR in the app data; app has 19 of 24 RR as Double rare. God pack: no set-specific measurement found; PokeGet says high-class god packs run ~1 per 30-50 boxes (pooled ~10,000 high-class boxes) = 1 in 300-500 packs -> 400, low confidence.",
+  "changed": true
+ },
+ "ja-SV5K": {
+  "rates": {
+   "Double rare": 7.3,
+   "Illustration rare": 10.0,
+   "Ultra Rare": 37.5,
+   "Special illustration rare": 150.0,
+   "Mega Hyper Rare": 300.0,
+   "ACE SPEC Rare": 30.0
+  },
+  "godPack": null,
+  "packsSampled": 30000,
+  "source": "https://pokemon-infomation.com/pull-rates-wildforce/ ; https://torecamap.co.jp/column/sv3/ (RR count)",
+  "confidence": "medium",
+  "note": "Regular box 30 packs x 5. PokeGet tally of 1000 boxes, per box: SR(Pokemon) 55% + SR(Supporter) 25%, SAR 20%, UR 10%, AR exactly 3, RR 4-5 (RR rate here uses torecamap's measured ~4.1/box). \"SR or better\" exactly 1 per box in practice (SAR/UR take the SR slot), 2-hit boxes ~1 per 12-box carton, rare 0-hit error boxes. Map: Ultra Rare=SR (Pokemon+Supporter), Illustration rare=AR, Special illustration rare=SAR, Mega Hyper Rare=gold UR, Double rare=RR. ACE SPEC exactly 1/box (ACE SPEC Rare). App \"Mega Hyper Rare\" here holds the 3 gold UR.",
+  "changed": true
+ },
+ "ja-SV5M": {
+  "rates": {
+   "Double Rare": 7.3,
+   "Illustration rare": 10.0,
+   "Ultra Rare": 37.5,
+   "Special illustration rare": 150.0,
+   "Hyper rare": 300.0,
+   "ACE Rare": 30.0
+  },
+  "godPack": null,
+  "packsSampled": 30000,
+  "source": "https://pokemon-infomation.com/pull-rates-cyberjudge/ ; https://torecamap.co.jp/column/sv3/ (RR count)",
+  "confidence": "medium",
+  "note": "Regular box 30 packs x 5. PokeGet tally of 1000 boxes, per box: SR(Pokemon) 55% + SR(Supporter) 25%, SAR 20%, UR 10%, AR exactly 3, RR 4-5 (RR rate here uses torecamap's measured ~4.1/box). \"SR or better\" exactly 1 per box in practice (SAR/UR take the SR slot), 2-hit boxes ~1 per 12-box carton, rare 0-hit error boxes. Map: Ultra Rare=SR (Pokemon+Supporter), Illustration rare=AR, Special illustration rare=SAR, Hyper rare=gold UR, Double Rare=RR. ACE SPEC exactly 1/box (ACE Rare).",
+  "changed": true
+ },
+ "ja-SV5a": {
+  "rates": {
+   "Double rare": 7.3,
+   "Illustration rare": 10.0,
+   "Ultra Rare": 37.5,
+   "Special illustration rare": 150.0,
+   "Hyper rare": 300.0
+  },
+  "godPack": null,
+  "packsSampled": 30000,
+  "source": "https://pokemon-infomation.com/pull-rates-crimsonhaze/ ; https://torecamap.co.jp/column/sv3/ (RR count)",
+  "confidence": "medium",
+  "note": "Regular box 30 packs x 5. PokeGet tally of 1000 boxes, per box: SR(Pokemon) 50% + SR(Supporter) 30%, SAR 20%, UR 10%, AR exactly 3, RR 4-5 (RR rate here uses torecamap's measured ~4.1/box). \"SR or better\" exactly 1 per box in practice (SAR/UR take the SR slot), 2-hit boxes ~1 per 12-box carton, rare 0-hit error boxes. Map: Ultra Rare=SR (Pokemon+Supporter), Illustration rare=AR, Special illustration rare=SAR, Hyper rare=gold UR, Double rare=RR. JP box also has exactly 1 ACE SPEC (3 kinds) but the app has no ACE rarity for this set.",
+  "changed": true
+ },
+ "ja-SV6": {
+  "rates": {
+   "Double rare": 7.3,
+   "Illustration rare": 10.0,
+   "Ultra Rare": 37.5,
+   "Special illustration rare": 150.0,
+   "Mega Hyper Rare": 300.0,
+   "ACE SPEC Rare": 30.0
+  },
+  "godPack": null,
+  "packsSampled": 30000,
+  "source": "https://pokemon-infomation.com/pull-rates-hengennokamen/ ; https://torecamap.co.jp/column/sv3/ (RR count)",
+  "confidence": "medium",
+  "note": "Regular box 30 packs x 5. PokeGet tally of 1000 boxes, per box: SR(Pokemon) 55% + SR(Supporter) 25%, SAR 20%, UR 10%, AR exactly 3, RR 4-5 (RR rate here uses torecamap's measured ~4.1/box). \"SR or better\" exactly 1 per box in practice (SAR/UR take the SR slot), 2-hit boxes ~1 per 12-box carton, rare 0-hit error boxes. Map: Ultra Rare=SR (Pokemon+Supporter), Illustration rare=AR, Special illustration rare=SAR, Mega Hyper Rare=gold UR, Double rare=RR. ACE SPEC exactly 1/box (ACE SPEC Rare). App \"Mega Hyper Rare\" here holds the 3 gold UR.",
+  "changed": true
+ },
+ "ja-SV6a": {
+  "rates": {
+   "Double rare": 7.3,
+   "Illustration rare": 10.0,
+   "Ultra Rare": 37.5,
+   "Special illustration rare": 150.0,
+   "Mega Hyper Rare": 300.0,
+   "ACE SPEC Rare": 30.0
+  },
+  "godPack": null,
+  "packsSampled": 30000,
+  "source": "https://pokemon-infomation.com/pull-rates-nightwanderer/ ; https://torecamap.co.jp/column/sv3/ (RR count)",
+  "confidence": "medium",
+  "note": "Regular box 30 packs x 5. PokeGet tally of 1000 boxes, per box: SR(Pokemon) 50% + SR(Supporter) 30%, SAR 20%, UR 10%, AR exactly 3, RR 4-5 (RR rate here uses torecamap's measured ~4.1/box). \"SR or better\" exactly 1 per box in practice (SAR/UR take the SR slot), 2-hit boxes ~1 per 12-box carton, rare 0-hit error boxes. Map: Ultra Rare=SR (Pokemon+Supporter), Illustration rare=AR, Special illustration rare=SAR, Mega Hyper Rare=gold UR, Double rare=RR. ACE SPEC exactly 1/box (ACE SPEC Rare). App \"Mega Hyper Rare\" here holds the 3 gold UR.",
+  "changed": true
+ },
+ "ja-SV7": {
+  "rates": {
+   "Double rare": 7.3,
+   "Illustration rare": 10.0,
+   "Ultra Rare": 37.5,
+   "Special illustration rare": 150.0,
+   "Hyper rare": 300.0
+  },
+  "godPack": null,
+  "packsSampled": 30000,
+  "source": "https://pokemon-infomation.com/pull-rates-stellamiracle/ ; https://torecamap.co.jp/column/sv7/ ; https://torecamap.co.jp/column/sv3/ (RR count)",
+  "confidence": "medium",
+  "note": "Regular box 30 packs x 5. PokeGet tally of 1000 boxes, per box: SR(Pokemon) 50% + SR(Supporter) 30%, SAR 20%, UR 10%, AR exactly 3, RR 4-5 (RR rate here uses torecamap's measured ~4.1/box). \"SR or better\" exactly 1 per box in practice (SAR/UR take the SR slot), 2-hit boxes ~1 per 12-box carton, rare 0-hit error boxes. Map: Ultra Rare=SR (Pokemon+Supporter), Illustration rare=AR, Special illustration rare=SAR, Hyper rare=gold UR, Double rare=RR. JP box has exactly 1 ACE SPEC but the app has no ACE rarity for this set. Second tally (torecamap): SR 79.6%, SAR 14.7% (1 in 6.8 boxes), UR 7.6% (1 in 13.2 boxes).",
+  "changed": true
+ },
+ "ja-SV7a": {
+  "rates": {
+   "Double rare": 7.3,
+   "Illustration rare": 10.0,
+   "Ultra Rare": 37.5,
+   "Special illustration rare": 150.0,
+   "Hyper rare": 300.0
+  },
+  "godPack": null,
+  "packsSampled": 30000,
+  "source": "https://pokemon-infomation.com/pull-rates-rakuendoragona/ ; https://torecamap.co.jp/column/sv3/ (RR count)",
+  "confidence": "medium",
+  "note": "Regular box 30 packs x 5. PokeGet tally of 1000 boxes, per box: SR(Pokemon) 50% + SR(Supporter) 30%, SAR 20%, UR 10%, AR exactly 3, RR 4-5 (RR rate here uses torecamap's measured ~4.1/box). \"SR or better\" exactly 1 per box in practice (SAR/UR take the SR slot), 2-hit boxes ~1 per 12-box carton, rare 0-hit error boxes. Map: Ultra Rare=SR (Pokemon+Supporter), Illustration rare=AR, Special illustration rare=SAR, Hyper rare=gold UR, Double rare=RR. JP box has exactly 1 ACE SPEC but the app has no ACE rarity for this set.",
+  "changed": true
+ },
+ "ja-SV8": {
+  "rates": {
+   "Double Rare": 7.3,
+   "Illustration rare": 10.0,
+   "Ultra Rare": 37.5,
+   "Special illustration rare": 150.0,
+   "Hyper rare": 300.0,
+   "ACE Rare": 30.0
+  },
+  "godPack": null,
+  "packsSampled": 30000,
+  "source": "https://pokemon-infomation.com/pull-rates-tyodenbraker/ ; https://torecamap.co.jp/column/sv3/ (RR count)",
+  "confidence": "medium",
+  "note": "Regular box 30 packs x 5. PokeGet tally of 1000 boxes, per box: SR(Pokemon) 55% + SR(Supporter) 25%, SAR 20%, UR 10%, AR exactly 3, RR 4-5 (RR rate here uses torecamap's measured ~4.1/box). \"SR or better\" exactly 1 per box in practice (SAR/UR take the SR slot), 2-hit boxes ~1 per 12-box carton, rare 0-hit error boxes. Map: Ultra Rare=SR (Pokemon+Supporter), Illustration rare=AR, Special illustration rare=SAR, Hyper rare=gold UR, Double Rare=RR. ACE SPEC exactly 1/box (ACE Rare).",
+  "changed": true
+ },
+ "ja-SV8a": {
+  "rates": {
+   "Double rare": 1.1,
+   "Ultra Rare": 8.1,
+   "Special illustration rare": 86.5,
+   "Hyper rare": 166.7
+  },
+  "godPack": 400,
+  "packsSampled": 20000,
+  "source": "https://pokemon-infomation.com/pull-rates-terafesex/ ; https://torecamap.co.jp/column/sv8a/ ; https://cuberoomblog.com/pokeca-terafes-boxopen/",
+  "confidence": "medium",
+  "note": "High-class box 10 packs x 10, 1 ex (RR) per pack -> RR 9/box. PokeGet tally of 2,000 boxes: Pokemon SAR exactly 1/box (27 kinds; guaranteed), SR 20% (12), Supporter SAR 10% (6), UR 6% (5), Master Ball mirror ~50%, ACE SPEC 1/box (no ACE rarity in the app), 2-hit boxes ~40%. torecamap (~220 boxes): SAR 124.09%, SR 19.09%, UR 6.8%, Master Ball 50.91% per box, which agrees. App buckets do not match JP codes (Ultra Rare 43 + Special illustration rare 4 + Hyper rare 3 = the 50 secret cards, which are SR 12 + SAR 33 + UR 5), so the ~1.3 SR/SAR per box is converted to a per-card rate (1.3 / 45 SR+SAR cards) and applied to the 43 Ultra Rare and 4 SIR cards (a derived split; check against card lists). God pack (6 mirrors + 3 Eevee SAR, or 9 Eevee SAR): no set-specific rate; PokeGet pooled high-class figure ~1 per 30-50 boxes = 1 in 300-500 packs -> 400, low confidence (cuberoomblog: 3-SAR packs maybe ~1 per carton, anecdotal).",
+  "changed": true
+ },
+ "ja-SV9": {
+  "rates": {
+   "Double rare": 7.3,
+   "Illustration rare": 10.0,
+   "Ultra Rare": 37.5,
+   "Special illustration rare": 150.0,
+   "Hyper rare": 300.0
+  },
+  "godPack": null,
+  "packsSampled": 30000,
+  "source": "https://pokemon-infomation.com/pull-rates-battlepartner/ ; https://torecamap.co.jp/column/sv9/ ; https://torecamap.co.jp/column/sv3/ (RR count)",
+  "confidence": "medium",
+  "note": "Regular box 30 packs x 5. PokeGet tally of 1000 boxes, per box: SR(Pokemon) 55% + SR(Supporter) 25%, SAR 20%, UR 10%, AR exactly 3, RR 4-5 (RR rate here uses torecamap's measured ~4.1/box). \"SR or better\" exactly 1 per box in practice (SAR/UR take the SR slot), 2-hit boxes ~1 per 12-box carton, rare 0-hit error boxes. Map: Ultra Rare=SR (Pokemon+Supporter), Illustration rare=AR, Special illustration rare=SAR, Hyper rare=gold UR, Double rare=RR. No ACE SPEC in this set. Second tally (torecamap): SR ~78%, SAR 15.4% (1 in 6.5 boxes), UR 9.2% (1 in 10.9 boxes).",
+  "changed": true
+ },
+ "ja-SV9a": {
+  "rates": {
+   "Double rare": 7.3,
+   "Illustration rare": 10.0,
+   "Ultra Rare": 37.5,
+   "Special illustration rare": 150.0,
+   "Hyper rare": 300.0
+  },
+  "godPack": null,
+  "packsSampled": 30000,
+  "source": "https://pokemon-infomation.com/pull-rates-neppuuarina/ ; https://torecamap.co.jp/column/sv3/ (RR count)",
+  "confidence": "medium",
+  "note": "Regular box 30 packs x 5. PokeGet tally of 1000 boxes, per box: SR(Pokemon) 55% + SR(Supporter) 25%, SAR 20%, UR 10%, AR exactly 3, RR 4-5 (RR rate here uses torecamap's measured ~4.1/box). \"SR or better\" exactly 1 per box in practice (SAR/UR take the SR slot), 2-hit boxes ~1 per 12-box carton, rare 0-hit error boxes. Map: Ultra Rare=SR (Pokemon+Supporter), Illustration rare=AR, Special illustration rare=SAR, Hyper rare=gold UR, Double rare=RR. No ACE SPEC in this set.",
+  "changed": true
+ },
+ "ja-m1L": {
+  "rates": {
+   "Double Rare": 7.3,
+   "Illustration rare": 10.0,
+   "Ultra Rare": 16.7,
+   "Special illustration rare": 107.1,
+   "Mega Hyper Rare": 1578.9
+  },
+  "godPack": null,
+  "packsSampled": 30000,
+  "source": "https://pokemon-infomation.com/https-pokemon-infomation-com-pull-rates-megabrave/ ; https://torecamap.co.jp/column/m2/ (Ninja Spinner page; RR count)",
+  "confidence": "medium",
+  "note": "Regular MEGA box 30 packs x 5. PokeGet tally of ~1000 boxes, per box: Item/Tool/Stadium SR exactly 1 (separate slot), SR(Pokemon/Supporter) ~80%, SAR ~28%, MUR 19 per 1,000 boxes, AR exactly 3, RR 4-5 (used ~4.1 measured by torecamap); 2-hit (3-hit counting the item SR) box ~1 per 12-box carton. Map: Ultra Rare = all SR incl. the item SR -> 1.8/box, Special illustration rare=SAR, Mega Hyper Rare=MUR, Double Rare=RR. MUR: the page says 19 MUR \"in 1,000 boxes of Mega Brave/Mega Symphonia\" (the Symphonia page says 13); read as per set.",
+  "changed": true
+ },
+ "ja-m1S": {
+  "rates": {
+   "Double Rare": 7.3,
+   "Illustration rare": 10.0,
+   "Ultra Rare": 16.7,
+   "Special illustration rare": 107.1,
+   "Mega Hyper Rare": 2307.7
+  },
+  "godPack": null,
+  "packsSampled": 30000,
+  "source": "https://pokemon-infomation.com/pull-rates-megasymphonia/ ; https://torecamap.co.jp/column/m2/ (Ninja Spinner page; RR count)",
+  "confidence": "medium",
+  "note": "Regular MEGA box 30 packs x 5. PokeGet tally of ~1000 boxes, per box: Item/Tool/Stadium SR exactly 1 (separate slot), SR(Pokemon/Supporter) ~80%, SAR ~28%, MUR 13 per 1,000 boxes, AR exactly 3, RR 4-5 (used ~4.1 measured by torecamap); 2-hit (3-hit counting the item SR) box ~1 per 12-box carton. Map: Ultra Rare = all SR incl. the item SR -> 1.8/box, Special illustration rare=SAR, Mega Hyper Rare=MUR, Double Rare=RR. MUR: 13 in 1,000 boxes (the Mega Brave page says 19); read as per set.",
+  "changed": true
+ },
+ "_unsourced": {
+  "swsh5": "Battle Styles: no large tally found (only single-box openings and unexplained third-party estimates). Keep SERIES_RATES fallback.",
+  "swsh6": "Chilling Reign: no large tally found (Packz blog quotes \"alt art V ~1 in 200\" without sample). Keep SERIES_RATES fallback.",
+  "sv6pt5": "Shrouded Fable: TCGplayer published no study; pullrates.com labels its numbers \"estimated\"; TCGTalk cites SIR 1/67 from ~1,500 community packs but the page could not be loaded to verify. All packs.js sv6pt5 values are estimates.",
+  "me6": "Delta Reign (releases 2026-11-06, English version of Japanese M6 Storm Emeralda): no measured English data yet. pullrates.com, Nerdsnack and Samurai Sword only project from Pitch Black / Storm Emeralda. See ja-M6 for the Japanese box tally (different 30x5 structure).",
+  "swsh8_RareHoloV": "Fusion Strike normal V rate is not in TCGplayer's infographic; packs.js 1/9 is a pullrates.com estimate.",
+  "swsh10_Radiant": "Astral Radiance Radiant Rare: TCGplayer study does not break it out; packs.js 1/20 unsourced.",
+  "RareHolo_swsh": "Rare Holo 1/3 in swsh7-swsh12 entries is an estimate (pullrates.com \"not measured\").",
+  "RGB Rare": "No English or Japanese tally has an RGB Mew yet (0 in ~3,400 English packs)."
+ },
+ "_meta": {
+  "generated": "2026-10-31",
+  "format": "rates: 1-in-N packs for ANY card of that rarity (N = 100/percent; 1 decimal under 20). G: keys = subset/gallery groups as in packs.js. \"a|b\" inside a G: key is one shared group rate.",
+  "changed_rule": "true if the set is new to PULL_RATES, adds a rarity key, or any value differs from packs.js by more than 10%. Dropped unsourced keys are listed in the note."
+ }
+}

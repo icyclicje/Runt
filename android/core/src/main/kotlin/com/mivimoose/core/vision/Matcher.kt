@@ -74,8 +74,38 @@ object Orb {
     }
 }
 
-/** One reference card for the matcher: its key, fingerprint and straightened grey image. */
-class RefCard(val key: String, val desc: FloatArray, val canon: ByteArray)
+/** One reference card: its key, fingerprint, straightened grey image (CANON size) and
+ *  artwork keypoints (in REF_W x REF_H pixels). */
+class RefCard(val key: String, val desc: FloatArray, val canon: ByteArray, val kpPts: FloatArray? = null, val kpDes: ByteArray? = null) {
+    companion object {
+        /** Everything the recogniser needs from one reference scan (grey, any size). */
+        fun build(key: String, gray: Mat, keypoints: Boolean = true): RefCard = matScope {
+            val ref = mat()
+            val interp = if (gray.rows() >= REF_H) Imgproc.INTER_AREA else Imgproc.INTER_CUBIC
+            Imgproc.resize(gray, ref, org.opencv.core.Size(REF_W.toDouble(), REF_H.toDouble()), 0.0, 0.0, interp)
+            val canon = mat()
+            Imgproc.resize(ref, canon, org.opencv.core.Size(CANON_W.toDouble(), CANON_H.toDouble()), 0.0, 0.0, Imgproc.INTER_AREA)
+            val bytes = ByteArray(CANON_W * CANON_H).also { canon.get(0, 0, it) }
+            val kp = if (keypoints) KeypointIndex.refFeatures(ref) else null
+            RefCard(key, Fingerprint.describe(canon), bytes, kp?.first, kp?.second)
+        }
+    }
+}
+
+/** Both indexes over the same pool of reference cards. */
+class CardIndex {
+    val fingerprints = FingerprintIndex()
+    val keypoints = KeypointIndex()
+    @Volatile var keys: Set<String> = emptySet(); private set
+    val size get() = fingerprints.size
+
+    @Synchronized
+    fun load(refs: Collection<RefCard>) {
+        fingerprints.load(refs)
+        keypoints.load(refs)
+        keys = refs.map { it.key }.toSet()
+    }
+}
 
 class Match(val key: String, val score: Float, val row: Int)
 
@@ -88,6 +118,7 @@ class FingerprintIndex {
     private var desc = FloatArray(0)
     private var mu: FloatArray? = null
     private val canon = HashMap<String, ByteArray>()
+    private var pos: Map<String, Int> = emptyMap()
     private val featCache = object : LinkedHashMap<String, OrbFeatures>(256, 0.75f, true) {
         override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, OrbFeatures>?) = size > 1500
     }
@@ -106,12 +137,27 @@ class FingerprintIndex {
         for (i in 0 until n) center(raw, i * d)
         desc = raw
         keys = refs.map { it.key }.toTypedArray()
+        pos = keys.withIndex().associate { it.value to it.index }
         canon.clear()
         refs.forEach { canon[it.key] = it.canon }
         synchronized(featCache) { featCache.keys.retainAll(canon.keys) }
     }
 
     fun contains(key: String) = canon.containsKey(key)
+
+    /** Fingerprint score of one particular card for a query (best row). */
+    fun scoreFor(query: Array<FloatArray>, key: String): Float {
+        val i = pos[key] ?: return 0f
+        val d = Fingerprint.DIM
+        var best = -2f
+        for (r in query) {
+            val q = r.copyOf().also { center(it, 0) }
+            var s = 0f
+            for (j in 0 until d) s += q[j] * desc[i * d + j]
+            if (s > best) best = s
+        }
+        return best
+    }
 
     private fun center(v: FloatArray, at: Int) {
         val m = mu ?: return

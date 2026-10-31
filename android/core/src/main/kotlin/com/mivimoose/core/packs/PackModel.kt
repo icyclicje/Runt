@@ -90,7 +90,11 @@ class PackModel(private val rates: PullRates = PullRates.DEFAULT) {
         val jaTwin = if (isIntl(s) && s.lang != "ja") "ja-" + s.id.substring(s.lang.length + 1) else null
         var src = rates.sets[s.id] ?: jaTwin?.let { rates.sets[it] }
         var source = if (src != null) "documented" else null
-        if (src == null && isIntl(s)) { src = if (layoutFor(s).size >= 7) rates.jpHighClass else rates.jpRegular; source = "box" }
+        if (src == null && isIntl(s)) {
+            val mega = Regex("^M\\d").containsMatchIn(s.id.substring(s.lang.length + 1))
+            src = if (layoutFor(s).size >= 7) rates.jpHighClass else if (mega) rates.jpRegularMega else rates.jpRegular
+            source = "box"
+        }
         if (src == null) rates.series[s.series]?.let { src = it; source = "series" }
         val main = HashMap<String, Double>()
         val gallery = ArrayList<Pair<List<String>, Double>>()
@@ -102,6 +106,9 @@ class PackModel(private val rates: PullRates = PullRates.DEFAULT) {
     }
 
     fun rateSource(s: CardSet) = ratesFor(s).source
+
+    /** Source, confidence and sample size behind a set's documented rates. */
+    fun rateInfo(s: CardSet): PullRates.Info? = rates.info[s.id] ?: if (isIntl(s)) rates.info["ja-" + s.id.substring(s.lang.length + 1)] else null
 
     private val baseRarities = setOf("Common", "Uncommon", "Rare", "Rare Holo", "Promo")
     private fun baseMedian(s: CardSet, rarity: String): Double {
@@ -211,7 +218,8 @@ class PackModel(private val rates: PullRates = PullRates.DEFAULT) {
         val slots = layout.map { k -> (slotDists[k] ?: emptyList()).ifEmpty { slotDists.getValue("any") } }.filter { it.isNotEmpty() }
 
         var god: God? = null
-        ov.godPack?.let { gp ->
+        val jaTwin = if (isIntl(s) && s.lang != "ja") "ja-" + s.id.substring(s.lang.length + 1) else null
+        (this@PackModel.rates.godPacks[s.id]?.let { 1 / it } ?: jaTwin?.let { this@PackModel.rates.godPacks[it] }?.let { 1 / it } ?: ov.godPack)?.let { gp ->
             val t4 = all.filter { rarityInfo(slotRarity(s, it)).tier == 4 }
             val t5 = all.filter { rarityInfo(slotRarity(s, it)).tier == 5 }
             if (t4.isNotEmpty()) god = God(gp, Pool(t4, false, null), Pool(t5.ifEmpty { t4 }, false, null), min(layout.size, 10))

@@ -98,6 +98,8 @@ class CardSet(
     var tcgGroupId: Long? = null
     /** Set code printed on cards ("MEW", "SV2a"...), when known. */
     var code: String? = null
+    /** TCGplayer's name for the set ("SV: Scarlet & Violet 151"), when known. */
+    var tcgName: String? = null
     /** Asian-language card lists from TCGdex that are missing their secret rares. */
     var incomplete = false
 

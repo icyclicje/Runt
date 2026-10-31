@@ -11,9 +11,44 @@ class PullRates(
     val jpRegular: Map<String, Double>,
     val jpHighClass: Map<String, Double>,
     /** Where each set's numbers come from, for the pull-rate tables. */
-    val sources: Map<String, String> = emptyMap(),
+    val info: Map<String, Info> = emptyMap(),
+    /** Japanese Mega-era regular boxes (an Item SR guaranteed per box). */
+    val jpRegularMega: Map<String, Double> = jpRegular,
+    /** God pack odds, 1 in N packs. */
+    val godPacks: Map<String, Double> = emptyMap(),
 ) {
+    class Info(val source: String, val confidence: String, val note: String, val packsSampled: Int?)
+
     companion object {
+        /** The built-in table updated with researched rates (assets/data/pull_rates.json):
+         *  each set entry {rates, godPack, packsSampled, source, confidence, note}. */
+        fun load(json: String?): PullRates {
+            if (json == null) return DEFAULT
+            val o = runCatching { org.json.JSONObject(json) }.getOrNull() ?: return DEFAULT
+            fun rates(e: org.json.JSONObject?): Map<String, Double>? = e?.optJSONObject("rates")?.let { r ->
+                r.keys().asSequence().associateWith { r.getDouble(it) }.filterValues { it > 0 }
+            }
+            val sets = HashMap(DEFAULT.sets)
+            val info = HashMap<String, Info>()
+            val gods = HashMap<String, Double>()
+            for (k in o.keys()) {
+                if (k.startsWith("_")) continue
+                val e = o.optJSONObject(k) ?: continue
+                rates(e)?.takeIf { it.isNotEmpty() }?.let { sets[k] = it }
+                if (e.has("godPack") && !e.isNull("godPack")) gods[k] = e.getDouble("godPack")
+                info[k] = Info(e.optString("source"), e.optString("confidence"), e.optString("note"),
+                    if (e.has("packsSampled") && !e.isNull("packsSampled")) e.optInt("packsSampled") else null)
+            }
+            return PullRates(
+                sets, DEFAULT.series,
+                rates(o.optJSONObject("_ja_generic_regular")) ?: DEFAULT.jpRegular,
+                DEFAULT.jpHighClass + (rates(o.optJSONObject("_ja_generic_high_class")) ?: emptyMap()),
+                info,
+                rates(o.optJSONObject("_ja_generic_regular_mega")) ?: DEFAULT.jpRegular,
+                gods,
+            )
+        }
+
         private const val TG = "Trainer Gallery Rare Holo"
         private const val TG_V = "Rare Holo V|Rare Holo VMAX|Rare Holo VSTAR|Rare Ultra"
 
