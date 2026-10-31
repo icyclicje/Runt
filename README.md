@@ -99,10 +99,17 @@ They're reported as the copy from the set you're opening.
 Measured on synthetic camera footage: moving cards, fingers, glare, holo shimmer,
 sleeves, toploaders, motion blur, a black-and-white sensor, and cluttered tables.
 
-| Test | Result |
-|---|---|
-| 151, all rarities, 40 cards brought up and taken away | 95% scanned, usually the frame they came fully into view |
-| Demo video (11 cards, duplicate and repeat rules) | all scanned, no false or double scans |
+Each card is brought up to the camera, held about a second, and taken away (`tests/bench_seq.py`).
+
+| Test | Scanned | False scans | Double scans |
+|---|---|---|---|
+| 151, all rarities (40 cards) | 39/40 (97.5%) | 0 | 0 |
+| Modern special cards (ex, full art, IR, SIR, gold) with 7 sets loaded at once (~1,600 cards, 50 cards) | 49/50 (98%) | 0 | 0 |
+| Look-alikes: cards with a same-name sibling, reprints across sets (40 cards) | 39/40 (97.5%) | 0 | 0 |
+| Demo video (11 cards, duplicate and repeat rules) | 11/11 | 0 | 0 |
+
+Most cards are confirmed the moment they're fully in view. The misses are extreme cases:
+small, blurry holo cards on very busy backgrounds with fingers over them.
 
 ## Building and testing
 
