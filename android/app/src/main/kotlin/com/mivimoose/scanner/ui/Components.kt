@@ -277,3 +277,15 @@ fun tierOf(usd: Double): Int {
     val s = Graph.prefs.value
     return when { usd >= s.jackpotValue -> 3; usd >= s.bigValue -> 2; usd >= s.hitValue -> 1; else -> 0 }
 }
+
+/** Card search off the main thread, debounced while typing. */
+@Composable
+fun rememberSearch(q: String, lang: String? = null, setId: String? = null, limit: Int = 60): List<Card> {
+    val cat = Graph.catalog.catalog.collectAsState().value
+    val res = androidx.compose.runtime.produceState(emptyList<Card>(), q, lang, setId, cat) {
+        if (cat == null || q.trim().length < 2) { value = emptyList(); return@produceState }
+        kotlinx.coroutines.delay(160)
+        value = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Default) { cat.search(q, setId, lang, limit) }
+    }
+    return res.value
+}

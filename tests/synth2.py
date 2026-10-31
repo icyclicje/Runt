@@ -21,8 +21,8 @@ ASPECT = 63 / 88
 class CardLook:
     """One physical card: its image plus the things that make it hard to read."""
 
-    def __init__(self, img_bgr: np.ndarray, rng: np.random.Generator, hard: bool = False):
-        h = 420
+    def __init__(self, img_bgr: np.ndarray, rng: np.random.Generator, hard: bool = False, tex_h: int = 420):
+        h = tex_h                                          # 420 for webcam tests; ~1000 keeps print legible for phone tests
         w = int(round(h * ASPECT))
         self.img = cv2.resize(img_bgr, (w, h), interpolation=cv2.INTER_CUBIC).astype(np.float32)
         a = np.ones((h, w), np.float32)

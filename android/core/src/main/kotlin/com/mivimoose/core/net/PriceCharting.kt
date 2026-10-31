@@ -32,7 +32,9 @@ class PriceCharting(private val http: Http) {
         val q = URLEncoder.encode(query, "UTF-8")
         val (final, body) = http.getFollow("$BASE/search-products?q=$q&type=prices", HEADERS)
         if (final.contains("/game/")) return final.substringBefore('?') to emptyList()
-        val links = Regex("href=\"(/game/pokemon-[^\"?#]+)\"").findAll(body).map { BASE + it.groupValues[1] }.distinct().take(20).toList()
+        // result links are absolute, with "&" written as "&amp;"
+        val links = Regex("href=\"(?:https://www\\.pricecharting\\.com)?(/game/pokemon-[^\"?#]+)\"").findAll(body)
+            .map { BASE + it.groupValues[1].replace("&amp;", "&") }.distinct().take(20).toList()
         return null to links
     }
 

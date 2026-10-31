@@ -36,6 +36,7 @@ import androidx.lifecycle.compose.LocalLifecycleOwner
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.opencv.android.Utils
 import org.opencv.core.Core
@@ -129,6 +130,11 @@ fun yPlane(img: ImageProxy): Mat {
 @Composable
 fun FileFeed(engine: ScanEngine, dir: String, modifier: Modifier = Modifier) {
     var bmp by remember { mutableStateOf<Bitmap?>(null) }
+    if (File(dir).listFiles()?.any { File(it, "truth.json").exists() } == true) {
+        LaunchedEffect(dir) { bench(engine, File(dir)) { bmp = it } }
+        bmp?.let { Image(it.asImageBitmap(), null, modifier.fillMaxSize(), contentScale = ContentScale.Crop) }
+        return
+    }
     LaunchedEffect(dir) {
         val files = File(dir).walkTopDown().filter { it.isFile && it.name.endsWith(".jpg") }.sortedBy { it.path }.toList()
         var t = 0.0
@@ -150,4 +156,58 @@ fun FileFeed(engine: ScanEngine, dir: String, modifier: Modifier = Modifier) {
         }
     }
     bmp?.let { Image(it.asImageBitmap(), null, modifier.fillMaxSize(), contentScale = ContentScale.Crop) }
+}
+
+/**
+ * Benchmark mode: every sub-folder with a truth.json is one sequence (a card brought up,
+ * held and taken away). Each is played once in real time from a cold start, in price-check
+ * mode, and what the scanner confirmed is logged ("BENCH" in logcat).
+ */
+private suspend fun bench(engine: ScanEngine, root: File, show: (Bitmap) -> Unit) {
+    val prefs = com.mivimoose.scanner.Graph.prefs
+    val oldMode = prefs.value.scanMode
+    prefs.update { it.copy(scanMode = "check") }
+    com.mivimoose.scanner.Graph.store.clearScans()
+    engine.updatePool()
+    val seqs = root.listFiles()!!.filter { File(it, "truth.json").exists() }.sortedBy { it.name }
+    var ok = 0; var wrong = 0; var n = 0
+    val delays = ArrayList<Int>()
+    for (d in seqs) {
+        val truth = org.json.JSONObject(File(d, "truth.json").readText())
+        val key = truth.getString("key")
+        val held = truth.getJSONArray("held")
+        val firstHeld = (0 until held.length()).first { held.getBoolean(it) }
+        engine.resetForBench()
+        val got = ArrayList<Pair<String, Int>>()
+        var frame = 0
+        val job = kotlinx.coroutines.CoroutineScope(Dispatchers.Default).launch { engine.results.collect { got += it.card.key to (frame - firstHeld) } }
+        val files = d.listFiles { f -> f.name.endsWith(".jpg") }!!.sortedBy { it.name }
+        var t = 0.0
+        for ((i, f) in files.withIndex()) {
+            frame = i
+            val b = withContext(Dispatchers.IO) { BitmapFactory.decodeFile(f.path) } ?: continue
+            show(b)
+            val t0 = System.nanoTime()
+            withContext(Dispatchers.Default) {
+                val rgba = Mat(); val gray = Mat()
+                Utils.bitmapToMat(b, rgba); Imgproc.cvtColor(rgba, gray, Imgproc.COLOR_RGBA2GRAY)
+                engine.onFrame(gray, t); rgba.release(); gray.release()
+            }
+            val ms = (System.nanoTime() - t0) / 1_000_000
+            t += maxOf(ms, 66L) / 1000.0
+            delay(maxOf(0L, 66L - ms))
+        }
+        delay(300)
+        job.cancel()
+        n++
+        val mine = got.filter { it.first == key }
+        val others = got.filter { it.first != key }
+        if (mine.isNotEmpty()) { ok++; delays += mine.first().second }
+        wrong += others.size
+        Log.i("BENCH", "${d.name} ${truth.getString("name")} #${truth.getString("number")}: " +
+            (if (mine.isNotEmpty()) "ok +${mine.first().second}f" else "MISSED") + (if (others.isNotEmpty()) " FALSE ${others.map { it.first }}" else ""))
+    }
+    delays.sort()
+    Log.i("BENCH", "SUMMARY ${root.name}: scanned $ok/$n, false $wrong, median delay ${delays.getOrNull(delays.size / 2)} frames")
+    prefs.update { it.copy(scanMode = oldMode) }
 }

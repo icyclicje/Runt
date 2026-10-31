@@ -138,15 +138,16 @@ fun ScanScreen(vm: AppVM, nav: NavHostController, testFrames: String?) {
         Column(Modifier.fillMaxSize().statusBarsPadding()) {
             Row(Modifier.fillMaxWidth().padding(horizontal = 8.dp), verticalAlignment = Alignment.CenterVertically) {
                 RoundIcon(Icons.AutoMirrored.Filled.ArrowBack, "Back") { nav.popBackStack() }
-                Spacer(Modifier.width(8.dp))
-                Box(Modifier.weight(1f)) {
-                    Pills(listOf("collect" to "Collect", "pack" to "Pack", "check" to "Price check"), settings.scanMode, { m ->
-                        Graph.prefs.update { it.copy(scanMode = m) }
-                        if (m == "pack" && settings.packSetId == null) pickSet = true
-                    })
-                }
+                Spacer(Modifier.weight(1f))
                 LanguageButton(settings.scanLanguage)
                 RoundIcon(if (torch) Icons.Default.FlashOn else Icons.Default.FlashOff, "Torch") { torch = !torch }
+            }
+            Spacer(Modifier.height(8.dp))
+            Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
+                Pills(listOf("collect" to "Collect", "pack" to "Pack", "check" to "Price check"), settings.scanMode, { m ->
+                    Graph.prefs.update { it.copy(scanMode = m) }
+                    if (m == "pack" && settings.packSetId == null) pickSet = true
+                })
             }
             if (settings.scanMode == "pack") PackBar(engine, settings.packSetId, result) { pickSet = true }
             Spacer(Modifier.height(8.dp))
@@ -418,7 +419,8 @@ private fun PsaStrip(g: GradedInfo) {
 private fun Alternatives(r: ScanResult, onPick: (Card) -> Unit) {
     var q by remember { mutableStateOf("") }
     val cat = Graph.catalog.catalog.value ?: return
-    val list = if (q.length >= 2) cat.search(q, limit = 20) else r.alternatives.ifEmpty { cat.search(r.card.name, limit = 12).filter { it.key != r.card.key } }
+    val found = rememberSearch(if (q.length >= 2) q else r.card.name, limit = 20)
+    val list = if (q.length >= 2) found else r.alternatives.ifEmpty { found.filter { it.key != r.card.key } }
     Column(Modifier.padding(top = 10.dp)) {
         SearchField(q, { q = it }, "Search the right card")
         Spacer(Modifier.height(6.dp))

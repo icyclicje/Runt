@@ -433,7 +433,7 @@ private fun GradingTool() {
 fun CardPicker(onPick: (Card) -> Unit, onDismiss: () -> Unit) {
     var q by remember { mutableStateOf("") }
     val cat = Graph.catalog.catalog.value ?: return
-    val list = remember(q) { if (q.length < 2) emptyList() else cat.search(q, limit = 40) }
+    val list = rememberSearch(q, limit = 40)
     AlertDialog(onDismissRequest = onDismiss, title = { Text("Find a card") }, text = {
         Column {
             SearchField(q, { q = it }, "Name, number or set")

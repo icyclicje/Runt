@@ -119,9 +119,13 @@ class ScanEngine {
         val quad = a.main
         val visualSure = a.sightings.firstOrNull()?.let { it.strength >= 0.55f } ?: false
         val now = System.currentTimeMillis()
-        if (quad != null && !visualSure && Graph.prefs.value.ocr && now - lastOcr > 450 && quad.area > 0.06f * w * h && ocrBusy.compareAndSet(false, true)) {
+        // No outline (card filling the frame, corners cut off, low contrast): read the guide box,
+        // where the scanner asks you to hold the card.
+        val textQuad = quad?.takeIf { it.area > 0.06f * w * h } ?: Quad.guide(w, h, 0.72f)
+        val coldStart = Graph.refs.index.size == 0
+        if (!visualSure && Graph.prefs.value.ocr && now - lastOcr > (if (coldStart) 300 else 450) && ocrBusy.compareAndSet(false, true)) {
             lastOcr = now
-            val bmp = cardBitmap(gray, quad)
+            val bmp = cardBitmap(gray, textQuad)
             scope.launch { try { readText(bmp, c) } finally { bmp.recycle(); ocrBusy.set(false) } }
         }
         // Recent strong text reads count as sightings too.
@@ -168,24 +172,40 @@ class ScanEngine {
 
     private suspend fun readText(bmp: Bitmap, c: Catalog) {
         val want = Graph.prefs.value.scanLanguage
-        val script = if (want == "auto") ocrScript else want
-        var lines = ocr.read(bmp, script)
+        // Automatic: Latin first (it also reads numbers on Asian cards); the Japanese reader
+        // (Japanese + Latin) is tried when Latin finds no usable name, and kept while the cards
+        // it reads really are in Japanese/Chinese/Korean.
+        val first = if (want == "auto") ocrScript else want
+        var lines = ocr.read(bmp, first)
         var clues = TextMatch.clues(lines)
+        var script = first
         if (want == "auto") {
-            // Switch reader when the text looks like another script (or nothing Latin was read)
-            val next = clues.script ?: if (clues.names.isEmpty() && script == "en") "ja" else "en"
-            if (next != script && (clues.script != null || clues.names.isEmpty())) {
-                ocrScript = if (next == "zh" || next == "ko" || next == "th") "ja" else next
-                if (clues.numbers.isEmpty()) { lines = ocr.read(bmp, ocrScript); clues = TextMatch.clues(lines) }
+            val weak = clues.names.none { n -> n.count { it.isLetter() } >= 3 }
+            if (first == "en" && weak) {
+                val l2 = ocr.read(bmp, "ja"); val c2 = TextMatch.clues(l2)
+                if (c2.script != null) { lines = l2; clues = c2; script = "ja"; ocrScript = "ja" }
+            } else if (first == "ja" && clues.script == null) {
+                ocrScript = "en"
             }
+        }
+        if (clues.numbers.isEmpty() && clues.names.isEmpty()) {
+            // maybe the card is upside down
+            val m = android.graphics.Matrix().apply { postRotate(180f) }
+            val flipped = Bitmap.createBitmap(bmp, 0, 0, bmp.width, bmp.height, m, false)
+            val l2 = ocr.read(flipped, script)
+            flipped.recycle()
+            TextMatch.clues(l2).takeIf { it.numbers.isNotEmpty() || it.names.isNotEmpty() }?.let { clues = it }
         }
         val pool = Graph.refs.poolSetIds.toSet()
         val cands = TextMatch.candidates(clues, c, pool)
+        Log.i(TAG, "text[$script] numbers=${clues.numbers.map { it.number + "/" + it.total }} names=${clues.names.take(3)} " +
+            "codes=${clues.codes.take(8)} -> ${cands.take(3).map { it.card.key + " %.2f".format(it.score) }}")
         if (cands.isEmpty()) return
         textCands = cands
         textAt = System.currentTimeMillis()
-        // Let vision double-check the likely cards
-        Graph.refs.addCards(c, cands.take(3).map { it.card.key })
+        // Let vision double-check the likely cards (more of them when the text was weak)
+        val n = if (cands.first().score >= 0.7f) 3 else 8
+        Graph.refs.addCards(c, cands.take(n).map { it.card.key })
     }
 
     /** Same artwork in two sets can't be told apart by sight: trust a fresh text read for which. */
@@ -197,6 +217,7 @@ class ScanEngine {
 
     private fun confirm(c: Catalog, key: String, cands: List<Card>, via: String) {
         val card = c.card(key) ?: return
+        Log.i(TAG, "confirmed $key via $via; text=${textCands.firstOrNull()?.let { it.card.key + " %.2f".format(it.score) }}")
         val s = Graph.prefs.value
         val store = Graph.store
         val variant = nextVariant?.takeIf { v -> card.variants().any { it.id == v } } ?: card.variants().first().id
@@ -281,6 +302,9 @@ class ScanEngine {
     fun packState() = Triple(packKeys.size, packValue, packId != null)
 
     fun rescan() { tracker.reset() }
+
+    /** Forget the current card and text reads (between benchmark sequences). */
+    fun resetForBench() { tracker.reset(); textCands = emptyList(); textAt = 0L }
 
     fun close() { scope.cancel(); ocr.close() }
 

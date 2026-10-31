@@ -29,10 +29,10 @@ from app.refs import RefStore, _decode, _download   # noqa: E402
 LEVELS = (0.2, 0.35, 0.5, 0.7)
 
 
-def color_images(cards):
+def color_images(cards, large=False):
     def get(c):
         try:
-            return c.key, vision.flatten_alpha(_decode(_download(c.img)), 200)
+            return c.key, vision.flatten_alpha(_decode(_download(c.img_large if large and c.img_large else c.img)), 200)
         except Exception:
             return c.key, None
     with cf.ThreadPoolExecutor(16) as pool:

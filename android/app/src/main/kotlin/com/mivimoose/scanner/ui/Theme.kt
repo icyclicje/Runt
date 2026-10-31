@@ -74,5 +74,7 @@ val Eyebrow = TextStyle(fontSize = 11.sp, fontWeight = FontWeight.SemiBold, lett
 
 @Composable
 fun VaultTheme(content: @Composable () -> Unit) {
-    MaterialTheme(colorScheme = scheme, typography = type, content = content)
+    MaterialTheme(colorScheme = scheme, typography = type) {
+        androidx.compose.runtime.CompositionLocalProvider(androidx.compose.material3.LocalContentColor provides Vault.text, content = content)
+    }
 }

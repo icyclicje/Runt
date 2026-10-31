@@ -141,7 +141,7 @@ fun SetRow(s: CardSet, pct: Float?, onClick: () -> Unit) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text(s.name, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, false))
                     if (s.lang != "en") { Spacer(Modifier.width(6.dp)); Tag(LANGUAGE_FLAGS[s.lang] ?: s.lang, Vault.periwinkle) }
-                    if (s.source == "tcgcsv" && s.release > java.time.LocalDate.now().minusDays(150).toString()) { Spacer(Modifier.width(6.dp)); Tag("NEW", Vault.mint) }
+                    if (s.source == "tcgcsv" && s.series != "Rare & Promo Packs" && s.release > java.time.LocalDate.now().minusDays(150).toString()) { Spacer(Modifier.width(6.dp)); Tag("NEW", Vault.mint) }
                 }
                 Text(listOfNotNull(s.release.take(4).ifEmpty { null }, s.code, "${s.cards.size} cards", s.nameLocal).joinToString(" · "), color = Vault.muted, fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
             }

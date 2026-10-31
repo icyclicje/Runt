@@ -51,6 +51,7 @@ def main():
     ap.add_argument('--hard', action='store_true')
     ap.add_argument('--seed', type=int, default=3)
     ap.add_argument('--other', default='sv4', help='set for background clutter (must not be loaded in the bench)')
+    ap.add_argument('--phone', action='store_true', help='hold the card the way the phone scanner asks: centred, filling most of the frame')
     a = ap.parse_args()
 
     out = os.path.join(a.cache, 'android_bench')
@@ -69,7 +70,7 @@ def main():
     if a.rare:
         cards = [c for c in cards if c.is_hit or 'holo' in c.rarity.lower()]
     picks = [cards[int(i)] for i in rng.choice(len(cards), min(a.n, len(cards)), replace=False)]
-    imgs = color_images(picks)
+    imgs = color_images(picks, large=True)      # high-res scans: the printed text must be legible, as through a phone camera
     other = [c for c in db.get_set(a.other).cards if not c.no_image]
     art_pool = list(color_images([other[int(i)] for i in rng.choice(len(other), 12, replace=False)]).values())
     seq_root = os.path.join(out, a.name)
@@ -79,8 +80,18 @@ def main():
         if c.key not in imgs:
             continue
         scene = synth2.Scene(rng, size=SIZE, art_pool=art_pool, hard=a.hard)
-        look = synth2.CardLook(imgs[c.key], rng, hard=a.hard)
+        look = synth2.CardLook(imgs[c.key], rng, hard=a.hard, tex_h=1000 if a.phone else 420)
+        if a.phone:
+            scene.lowres = False                    # phones capture at 1080p, not a 640x360 webcam
         path = synth2.handheld_path(rng, SIZE, hold_frames=24, hard=a.hard)
+        if a.phone:
+            # recentre and resize the held part: card 55-75% of the frame height, near the middle
+            hgt = rng.uniform(0.55, 0.75) * SIZE[0]
+            cx, cy = rng.uniform(0.44, 0.56) * SIZE[1], rng.uniform(0.44, 0.52) * SIZE[0]
+            held0 = next(i for i, p in enumerate(path) if p[5])
+            c0 = path[held0][0]
+            path = [((cx + (c[0] - c0[0]), cy + (c[1] - c0[1])), hgt, ang if not a.hard else ang, persp * 0.6, tilt, h)
+                    for c, _, ang, persp, tilt, h in path]
         d = os.path.join(seq_root, f'{n:03d}')
         os.makedirs(d, exist_ok=True)
         held, prev = [], None

@@ -41,7 +41,8 @@ class Money(ctx: Context, private val net: Net) {
         if (usd == null || usd.isNaN()) return "—"
         val v = convert(usd, cur)
         val sym = SYMBOLS[cur] ?: "$"
-        val noCents = cur == "JPY" || !cents || abs(v) >= 10_000
+        // cents=false drops cents only on larger amounts ($1,265 not $1,265.00; still $0.22)
+        val noCents = cur == "JPY" || (!cents && abs(v) >= 100) || abs(v) >= 10_000
         val nf = NumberFormat.getNumberInstance(Locale.US).apply {
             maximumFractionDigits = if (noCents) 0 else 2; minimumFractionDigits = if (noCents) 0 else 2
         }

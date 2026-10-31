@@ -32,6 +32,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.collectAsState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -104,6 +105,8 @@ class MainActivity : ComponentActivity() {
                         composable("settings") { SettingsScreen(vm, nav) }
                     }
                     BottomBar(nav, Modifier.align(Alignment.BottomCenter))
+                    val ready by vm.catalog.collectAsState()
+                    if (ready == null) LoadingCards(vm)
                 }
                 androidx.compose.runtime.LaunchedEffect(Unit) {
                     when {
@@ -198,3 +201,17 @@ private fun ScanButton(onClick: () -> Unit) {
 
 /** Space the bottom bar takes over screens. */
 val BottomBarSpace = 96.dp
+
+/** First start: the card database is being read. */
+@Composable
+private fun LoadingCards(vm: AppVM) {
+    val status by vm.status.collectAsState()
+    Box(Modifier.fillMaxSize().background(Vault.bg).clickable(enabled = false) {}, contentAlignment = Alignment.Center) {
+        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            com.mivimoose.scanner.ui.Ring(0.75f, 64.dp, 6.dp)
+            androidx.compose.foundation.layout.Spacer(Modifier.height(18.dp))
+            com.mivimoose.scanner.ui.HoloText("MIVIMOOSE RIPS", androidx.compose.ui.text.TextStyle(fontSize = 16.sp, fontWeight = FontWeight.Black, letterSpacing = 3.sp))
+            Text(status, color = Vault.muted, fontSize = 13.sp)
+        }
+    }
+}

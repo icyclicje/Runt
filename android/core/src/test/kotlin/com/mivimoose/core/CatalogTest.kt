@@ -70,6 +70,12 @@ class CatalogTest {
         assertEquals("sv3pt5|199|Charizard EX", c.first().card.key)
         println("top: " + c.take(3).joinToString { "${it.card.key} %.2f (${it.why})".format(it.score) })
 
+        // A misread digit (122 read as 022) is outvoted by the name and the set size
+        val t0 = System.nanoTime()
+        val mime = TextMatch.candidates(TextMatch.clues(listOf(line("Mr. Mime", 0.03f, 0.08f), line("O22/165 ●", 0.95f, 0.97f))), cat)
+        println("mime (%.0f ms): ".format((System.nanoTime() - t0) / 1e6) + mime.take(3).joinToString { "${it.card.key} %.2f (${it.why})".format(it.score) })
+        assertEquals("sv3pt5|122|Mr. Mime", mime.first().card.key)
+
         val jp = TextMatch.clues(listOf(line("リザードンex", 0.03f, 0.08f), line("SV2a 201/165 SAR", 0.95f, 0.97f)))
         assertEquals("ja", jp.script)
         val cj = TextMatch.candidates(jp, cat)

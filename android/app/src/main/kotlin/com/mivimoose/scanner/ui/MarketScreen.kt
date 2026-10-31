@@ -50,7 +50,7 @@ fun MarketScreen(vm: AppVM, nav: NavHostController) {
     var q by rememberSaveable { mutableStateOf("") }
     var lang by rememberSaveable { mutableStateOf("all") }
     val c = cat ?: return
-    val results = remember(q, lang, c) { if (q.length < 2) emptyList() else c.search(q, lang = lang.takeIf { it != "all" }, limit = 80) }
+    val results = rememberSearch(q, lang.takeIf { it != "all" }, limit = 80)
 
     LazyColumn(Modifier.fillMaxSize().statusBarsPadding(), contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 8.dp, bottom = BottomBarSpace + 16.dp)) {
         item {

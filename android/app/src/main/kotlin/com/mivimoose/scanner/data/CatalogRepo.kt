@@ -48,7 +48,9 @@ class CatalogRepo(private val ctx: Context, private val net: Net, private val tc
     private fun readText(name: String): String? {
         val f = File(dir, name)
         if (f.exists() && f.length() > 1000) return f.readText()
-        return runCatching { GZIPInputStream(ctx.assets.open("data/$name.gz")).bufferedReader().readText() }.getOrNull()
+        // The build unpacks .gz assets and stores them under the plain name.
+        return runCatching { ctx.assets.open("data/$name").bufferedReader().readText() }.getOrNull()
+            ?: runCatching { GZIPInputStream(ctx.assets.open("data/$name.gz")).bufferedReader().readText() }.getOrNull()
     }
 
     private fun parseLocal(): Catalog {
@@ -56,9 +58,26 @@ class CatalogRepo(private val ctx: Context, private val net: Net, private val tc
             val o = JSONObject(ctx.assets.open("data/tcg_groups.json").bufferedReader().readText())
             o.keys().asSequence().associateWith { o.getJSONObject(it) }
         }.getOrDefault(emptyMap())
-        val c = BundleParser.parse(readText("bundle.js") ?: error("no card data"), readText("pack-art.js"))
+        val c = cachedOrParse()
         val extra = imported.values.filter { it.id !in c.sets }
         return withCodes(if (extra.isEmpty()) c else Catalog(c.sets.values + extra, c.updated))
+    }
+
+    /** The site data, from the binary cache when it matches the current download (fast start). */
+    private fun cachedOrParse(): Catalog {
+        val t0 = System.currentTimeMillis()
+        val src = File(dir, "bundle.js")
+        val stamp = "${if (src.exists()) src.lastModified() else 0}-${com.mivimoose.scanner.BuildConfig.VERSION_CODE}"
+        val bin = File(dir, "catalog.bin"); val stampFile = File(dir, "catalog.stamp")
+        if (bin.exists() && stampFile.exists() && stampFile.readText() == stamp) {
+            com.mivimoose.core.catalog.CatalogCache.read(bin.inputStream())?.let {
+                Log.i(TAG, "catalog from cache in ${System.currentTimeMillis() - t0} ms"); return it
+            }
+        }
+        val c = BundleParser.parse(readText("bundle.js") ?: error("no card data"), readText("pack-art.js"))
+        runCatching { com.mivimoose.core.catalog.CatalogCache.write(c.sets.values, c.updated, bin.outputStream()); stampFile.writeText(stamp) }
+        Log.i(TAG, "catalog parsed in ${System.currentTimeMillis() - t0} ms")
+        return c
     }
 
     /** Printed set codes and TCGplayer groups (shipped table; Asian sets use their own set codes). */
@@ -80,6 +99,7 @@ class CatalogRepo(private val ctx: Context, private val net: Net, private val tc
     private fun publish(c: Catalog) {
         packs.invalidate()
         _catalog.value = c
+        scope.launch(Dispatchers.Default) { c.warmSearch() }
         _status.value = "${c.sets.size} sets · ${"%,d".format(c.cardCount)} cards"
     }
 

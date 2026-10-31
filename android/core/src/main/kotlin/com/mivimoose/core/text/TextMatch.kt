@@ -30,7 +30,8 @@ class TextClues(
 class TextCandidate(val card: Card, val score: Float, val why: String)
 
 object TextMatch {
-    private val NUM_RE = Regex("(?<![A-Za-z0-9])([A-Z]{0,4}\\s?\\d{1,3}[a-z]?)\\s*[/|\\\\]\\s*([A-Z]{0,4}\\s?\\d{1,3})(?![0-9])")
+    /** "199/165", "TG05/TG30", "GG12/GG70", "SV107/SV122"; a language mark ("EN 199") is not part of it. */
+    private val NUM_RE = Regex("(?<![A-Za-z0-9])((?:TG|GG|SV|RC|SH|H)?\\d{1,3}[a-z]?)\\s*[/|\\\\]\\s*((?:TG|GG|SV|RC|SH|H)?\\d{1,3})(?![0-9])")
     private val PROMO_RE = Regex("(?<![A-Za-z0-9])(SWSH|SVP|SV-P|SM|XY|BW|DP|HGSS|MEP|ME-P|SVEN)\\s?-?(\\d{1,3})(?![0-9])", RegexOption.IGNORE_CASE)
     private val HP_RE = Regex("(?:HP\\s*(\\d{2,3}))|(?:(\\d{2,3})\\s*HP)", RegexOption.IGNORE_CASE)
     private val WORD_RE = Regex("[A-Za-z0-9-]{2,6}")
@@ -142,46 +143,86 @@ object TextMatch {
         else -> set.lang == script
     }
 
+    /** Same length, one character different (a typical OCR slip in a collector number). */
+    private fun oneOff(a: String, b: String): Boolean {
+        if (a.length != b.length || a == b) return false
+        var d = 0
+        for (i in a.indices) if (a[i] != b[i] && ++d > 1) return false
+        return d == 1
+    }
+
+    /** Cards whose name looks like one of the read name lines. */
+    private fun byName(catalog: Catalog, names: List<String>): List<Card> {
+        val out = LinkedHashSet<Card>()
+        for (n in names.take(4)) {
+            val q = Catalog.squash(n)
+            if (q.length < 3) continue
+            for ((k, cards) in catalog.byName) {
+                // the read line may hold the name plus other words ("Mr. Mime HP 90")
+                val contains = k.length >= 5 && q.contains(k)
+                if (!contains) {
+                    if (kotlin.math.abs(k.length - q.length) > 3 || k[0] != q[0]) continue
+                    if (1f - levenshtein(q, k).toFloat() / max(q.length, k.length) < 0.75f) continue
+                }
+                out += cards
+            }
+            if (out.size > 400) break
+        }
+        return out.toList()
+    }
+
     /**
-     * Cards the text could belong to, best first. score ~ 1 means number, set code and
-     * name all agree; ~0.6 a number plus a plausible name.
+     * Cards the text could belong to, best first. Name, collector number (exact or one
+     * character off), printed set size and set code are scored together, so one misread
+     * field doesn't lead astray: ~1 means everything agrees, ~0.6 name plus set size.
      */
     fun candidates(clues: TextClues, catalog: Catalog, preferredSets: Set<String> = emptySet(), limit: Int = 8): List<TextCandidate> {
         if (clues.isEmpty) return emptyList()
-        val out = HashMap<String, TextCandidate>()
-        fun offer(c: Card, score: Float, why: String) {
-            val old = out[c.key]
-            if (old == null || old.score < score) out[c.key] = TextCandidate(c, score, why)
-        }
         val codeSets = clues.codes.flatMap { catalog.byCode[it] ?: emptyList() }.map { it.id }.toSet()
-        for (n in clues.numbers) {
-            val pool = catalog.byNumber[Catalog.normNumber(n.number)] ?: continue
-            for (c in pool) {
-                val set = catalog.sets[c.setId] ?: continue
-                val total = n.total
-                val totalOk = when {
-                    total == null -> false
-                    total.all { it.isDigit() } -> set.printed == total.toInt() || set.cards.count { it.mainSet } == total.toInt()
-                    else -> set.cards.any { Catalog.normNumber(it.number) == Catalog.normNumber(total) }
+        val readNums = clues.numbers.map { Catalog.normNumber(it.number) }.distinct()
+        val rawNums = clues.numbers.map { it.number.uppercase() }.distinct()
+        val totals = clues.numbers.mapNotNull { it.total }.distinct()
+        val pool = LinkedHashSet<Card>()
+        for (n in readNums) {
+            catalog.byNumber[n]?.let { pool += it }
+            // one digit misread: only in sets whose printed size was read
+            if (totals.isNotEmpty() && n.any { it.isDigit() }) {
+                for (i in n.indices) if (n[i].isDigit()) for (d in '0'..'9') {
+                    if (d == n[i]) continue
+                    val v = Catalog.normNumber(n.substring(0, i) + d + n.substring(i + 1))
+                    catalog.byNumber[v]?.filter { c -> catalog.sets[c.setId]?.let { totalOk(it, totals) } == true }?.let { pool += it }
                 }
-                val codeOk = set.id in codeSets
-                if (!totalOk && !codeOk && n.total != null && n.total.all { it.isDigit() }) continue
-                val ns = nameScore(c, clues.names)
-                var score = 0.35f + (if (totalOk) 0.15f else 0f) + (if (codeOk) 0.3f else 0f) + 0.35f * ns
-                if (!langMatches(set, clues.script)) score -= 0.25f
-                if (c.setId in preferredSets) score += 0.05f
-                if (clues.hp != null && c.kind == "P" && ns > 0.6f) score += 0.03f
-                offer(c, score.coerceAtMost(1f), listOfNotNull("number", if (totalOk) "total" else null, if (codeOk) "set code" else null, if (ns > 0.7f) "name" else null).joinToString("+"))
             }
         }
-        if (out.isEmpty() && clues.names.isNotEmpty()) {
-            // No readable number: names only, within the set codes or preferred sets.
-            val scope = (codeSets + preferredSets).mapNotNull { catalog.sets[it] }
-            for (s in scope) for (c in s.cards) {
-                val ns = nameScore(c, clues.names)
-                if (ns >= 0.8f) offer(c, 0.25f + 0.3f * ns + (if (s.id in codeSets) 0.15f else 0f), "name")
-            }
+        pool += byName(catalog, clues.names)
+        val out = ArrayList<TextCandidate>()
+        for (c in pool) {
+            val set = catalog.sets[c.setId] ?: continue
+            val ns = nameScore(c, clues.names)
+            val cn = Catalog.normNumber(c.number)
+            val numExact = cn in readNums
+            // compare digit for digit at the printed width ("022" read for "122")
+            val numNear = !numExact && rawNums.any { r -> oneOff(r, c.number.uppercase().padStart(r.length, '0')) }
+            val tOk = totals.isNotEmpty() && totalOk(set, totals)
+            val codeOk = set.id in codeSets
+            if (!numExact && !numNear && ns < 0.75f) continue
+            var score = 0.40f * ns + (if (numExact) 0.25f else if (numNear) 0.10f else 0f) + (if (tOk) 0.15f else 0f) + (if (codeOk) 0.20f else 0f)
+            if (ns >= 0.9f && numExact) score += 0.10f
+            if (totals.isNotEmpty() && !tOk && !codeOk) score -= 0.15f
+            if (!langMatches(set, clues.script)) score -= 0.25f
+            if (clues.script == null && set.lang == "en") score += 0.03f
+            if (c.setId in preferredSets) score += 0.05f
+            // ties (e.g. a name read without its number) lean towards newer sets: what people open
+            score += 0.02f * ((set.year - 1999).coerceIn(0, 27) / 27f)
+            val why = listOfNotNull(if (ns >= 0.75f) "name" else null, if (numExact) "number" else if (numNear) "number~" else null,
+                if (tOk) "set size" else null, if (codeOk) "set code" else null).joinToString("+")
+            out += TextCandidate(c, score.coerceIn(0f, 1f), why)
         }
-        return out.values.sortedByDescending { it.score }.take(limit)
+        return out.sortedByDescending { it.score }.distinctBy { it.card.key }.take(limit)
+    }
+
+    private fun totalOk(set: CardSet, totals: List<String>): Boolean = totals.any { t ->
+        if (t.all { it.isDigit() }) t.toInt().let { n -> set.printed == n || set.cards.count { it.mainSet } == n }
+        else set.cards.any { Catalog.normNumber(it.number) == Catalog.normNumber(t) }
     }
 }
