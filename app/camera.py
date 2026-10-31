@@ -147,9 +147,13 @@ class SteamVRCameraSource(CameraSource):
     """
     kind = 'steamvr'
 
+    NO_FRAMES = ('SteamVR says the headset has a camera, but it isn\'t sending pictures to apps. '
+                 'The Steam Frame doesn\'t share its cameras with PC apps yet, so use a webcam instead.')
+
     def __init__(self, vr, eye: str = 'left', **kw):
         super().__init__('Headset camera (SteamVR)', **kw)
         self.vr, self.eye = vr, eye
+        self.failed = False                         # gave up: no frames ever arrived
 
     def _run(self):
         import openvr
@@ -162,28 +166,39 @@ class SteamVRCameraSource(CameraSource):
                 cam = openvr.VRTrackedCamera()
                 hmd = openvr.k_unTrackedDeviceIndex_Hmd
                 if not cam.hasCamera(hmd):
-                    self.status, self.error = 'error', ('SteamVR reports no headset camera. Turn it on in SteamVR '
-                                                        'Settings > Video > Camera, or pick a webcam instead.')
-                    self._stop.wait(3.0)
+                    self.status, self.error = 'error', 'SteamVR reports no headset camera. Use a webcam instead.'
+                    self.failed = True
+                    self._stop.wait(10.0)
                     continue
                 ftype = openvr.VRTrackedCameraFrameType_Undistorted
                 w, h, size = cam.getCameraFrameSize(hmd, ftype)
                 handle = cam.acquireVideoStreamingService(hmd)
             except Exception as e:
-                self.status, self.error = 'error', f'Headset camera unavailable: {e}'
-                self._stop.wait(3.0)
+                self.status, self.error = 'error', f'Headset camera unavailable ({e}). Use a webcam instead.'
+                self.failed = True
+                self._stop.wait(10.0)
                 continue
-            buf = (ctypes.c_uint8 * size)()
+            buf = (ctypes.c_uint8 * max(1, size))()
             last_seq = -1
             n, t0 = 0, time.time()
-            self.status, self.error = 'live', ''
+            self.status, self.error = 'starting', 'Waiting for the headset camera…'
+            started = time.time()
+            got_any = False
             try:
                 while not self._stop.is_set() and self.vr.connected:
                     try:
                         hdr = cam.getVideoStreamFrameBuffer(handle, ftype, buf, size)
-                    except Exception:               # no frame yet (camera spinning up)
+                    except Exception:               # no frame yet (spinning up), or never (Steam Frame)
+                        if not got_any and time.time() - started > 5.0:
+                            self.status, self.error = 'error', self.NO_FRAMES
+                            self.failed = True
+                            break
                         time.sleep(0.02)
                         continue
+                    if not got_any:
+                        got_any = True
+                        self.failed = False
+                        self.status, self.error = 'live', ''
                     if hdr.nFrameSequence == last_seq:
                         time.sleep(0.008)
                         continue
@@ -202,6 +217,8 @@ class SteamVRCameraSource(CameraSource):
                     cam.releaseVideoStreamingService(handle)
                 except Exception:
                     pass
+            if self.failed:
+                self._stop.wait(15.0)               # check again now and then (a SteamVR update may enable it)
 
     def _pick_eye(self, img):
         if self.eye == 'full':

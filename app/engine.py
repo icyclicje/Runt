@@ -168,6 +168,8 @@ class Engine:
             raise ValueError('unknown set')
         self.settings.update({'active_set': set_id})
         self._activate(set_id, keep_pack=False)
+        if self.settings['snd_ui']:
+            self.sounds.play('select')
 
     def _activate(self, set_id: str, keep_pack: bool):
         with self.lock:
@@ -257,6 +259,15 @@ class Engine:
             if cam is None or not self.data_ready:
                 time.sleep(0.1)
                 continue
+            if cam.kind == 'steamvr' and getattr(cam, 'failed', False) and s['camera'] == 'auto':
+                # 'Automatic' picked the headset camera but it sends no pictures (Steam Frame): use a webcam
+                log.info('headset camera sends no frames; switching to a webcam')
+                if self.vr:
+                    self.vr.has_camera = False
+                self.bus.emit('toast', message='The headset camera isn’t available to apps, so the webcam is used instead.',
+                              level='info')
+                self.restart_camera()
+                continue
             seq2, frame = cam.get(seq, timeout=0.3)
             if frame is None or seq2 == seq:
                 continue
@@ -293,6 +304,10 @@ class Engine:
         now = time.time()
         confirmed = self.tracker.update(dets, now, threshold, 0.5, s['rescan_gap'], min_sightings)
         pend_key, pend_prog = self.tracker.pending(threshold)
+        if pend_key and pend_key != getattr(self, '_last_pending', None) and s['snd_reading']                 and now - getattr(self, '_last_tick', 0) > 0.6:
+            self.sounds.play('reading')                    # a new card has started being read
+            self._last_tick = now
+        self._last_pending = pend_key
         locked = set(self.tracker.locked)
         self.vis = {
             'ts': now,
@@ -350,6 +365,8 @@ class Engine:
 
     def _open_pack(self, set_id: str) -> dict:
         pid = self.store.open_pack(set_id, self._pack_size(set_id), self._pack_cost(set_id))
+        if self.settings['snd_ui'] and self.data_ready:
+            self.sounds.play('deal')                       # a fresh pack: the sound of cards being dealt
         return self.store.pack(pid)
 
     def _ensure_pack(self) -> dict | None:
@@ -388,17 +405,18 @@ class Engine:
         scan = self.scan_dict(self.store.scan(sid))
         self.bus.emit('scan', scan=scan)
 
-        # sound + voice
-        if dupe:
-            snd = 'dupe' if s['snd_dupe'] else None
-        elif price >= s['big_hit_value'] and s['snd_hit']:
+        # sound + voice: the pull's value picks the sound (a valuable dupe still celebrates)
+        snd = None
+        if s['snd_hit'] and price >= s['jackpot_value']:
+            snd = 'jackpot'
+        elif s['snd_hit'] and price >= s['big_hit_value']:
             snd = 'big'
-        elif price >= s['hit_value'] and s['snd_hit']:
+        elif s['snd_hit'] and price >= s['hit_value']:
             snd = 'hit'
-        else:
-            snd = 'new' if s['snd_new'] else None
-        if dupe and price >= s['hit_value'] and s['snd_hit']:
-            snd = 'hit'                                   # a valuable dupe is still a good pull
+        elif dupe:
+            snd = 'dupe' if s['snd_dupe'] else None
+        elif s['snd_new']:
+            snd = 'new'
         if snd:
             self.sounds.play(snd)
         self._announce(card, price, dupe)
@@ -528,6 +546,8 @@ class Engine:
     def toggle_pause(self, value: bool | None = None):
         v = (not self.settings['paused']) if value is None else bool(value)
         self.settings.update({'paused': v})
+        if self.settings['snd_ui']:
+            self.sounds.play('pause' if v else 'resume')
         self.tracker.reset(keep_lock=True)
         self.bus.emit('state_changed')
 

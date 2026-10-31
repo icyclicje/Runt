@@ -34,6 +34,7 @@ class CardLook:
         self.holo = rng.random() < (0.45 if hard else 0.3)
         self.reverse = rng.random() < 0.25
         self.holo_phase = rng.uniform(0, 6.28)
+        self.holo_amp = rng.uniform(0.06, 0.2 if hard else 0.12)   # foil shimmer strength
         self.sleeve = rng.choice(['none', 'none', 'none', 'penny', 'toploader'] if not hard else ['none', 'penny', 'toploader'])
         n_fingers = rng.choice([0, 1, 1, 2, 2, 3] if hard else [0, 1, 1, 2])
         self.fingers = []
@@ -68,7 +69,7 @@ def card_texture(look: CardLook, t: float, tilt: float) -> tuple[np.ndarray, np.
             inv = np.ones((h, w, 1), np.float32)
             inv[art] = 0
             mask = np.maximum(mask, inv)
-        img = img * (1 + 0.22 * pat * mask) + 25 * pat * mask
+        img = img * (1 + look.holo_amp * pat * mask) + 110 * look.holo_amp * pat * mask
     if look.glare:
         g = np.zeros((h, w), np.float32)
         gx = (look.glare_pos[0] + 0.25 * math.sin(tilt * 3 + t)) * w

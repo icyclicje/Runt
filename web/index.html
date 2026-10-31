@@ -6,145 +6,185 @@
   <title>MivimooseRips Scanner</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Bungee&family=Rubik:wght@400;500;700;800&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet">
   <link rel="icon" href="icon.svg">
   <link rel="stylesheet" href="app.css">
 </head>
 <body>
-  <header class="topbar">
-    <div class="brand"><img src="icon.svg" alt=""><span>Mivimoose<b>Rips</b> <small>Scanner</small></span></div>
-    <nav class="tabs" id="tabs">
-      <button data-tab="scan" class="active">Scan</button>
-      <button data-tab="progress">Set Progress</button>
-      <button data-tab="packs">Packs</button>
-      <button data-tab="collection">Collection</button>
-      <button data-tab="settings">Settings</button>
-    </nav>
-    <div class="chips" id="status-chips"></div>
-  </header>
+  <div class="aurora" aria-hidden="true"><i></i><i></i><i></i></div>
 
-  <main>
+  <svg width="0" height="0" style="position:absolute" aria-hidden="true">
+    <defs>
+      <linearGradient id="holoStroke" x1="0" y1="0" x2="1" y2="1">
+        <stop offset="0" stop-color="#6ef3d6"/><stop offset=".35" stop-color="#8aa2ff"/>
+        <stop offset=".7" stop-color="#e48bff"/><stop offset="1" stop-color="#ffcf8a"/>
+      </linearGradient>
+      <symbol id="i-scan" viewBox="0 0 24 24"><path d="M4 8V5a1 1 0 0 1 1-1h3M16 4h3a1 1 0 0 1 1 1v3M20 16v3a1 1 0 0 1-1 1h-3M8 20H5a1 1 0 0 1-1-1v-3"/><rect x="8.5" y="7" width="7" height="10" rx="1.2"/></symbol>
+      <symbol id="i-binder" viewBox="0 0 24 24"><rect x="4" y="3.5" width="16" height="17" rx="2"/><path d="M12 3.5v17M7 8h2.5M7 12h2.5M14.5 8H17M14.5 12H17"/></symbol>
+      <symbol id="i-packs" viewBox="0 0 24 24"><path d="M6 3.5h12l-1 3H7z"/><path d="M7 6.5h10v12.5a1.5 1.5 0 0 1-1.5 1.5h-7A1.5 1.5 0 0 1 7 19z"/><path d="M10 11h4"/></symbol>
+      <symbol id="i-collection" viewBox="0 0 24 24"><rect x="3.5" y="5" width="7" height="9.5" rx="1.2"/><rect x="13.5" y="5" width="7" height="9.5" rx="1.2"/><path d="M3.5 18.5h17"/></symbol>
+      <symbol id="i-settings" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M12 2.8v2.4M12 18.8v2.4M21.2 12h-2.4M5.2 12H2.8M18.5 5.5l-1.7 1.7M7.2 16.8l-1.7 1.7M18.5 18.5l-1.7-1.7M7.2 7.2 5.5 5.5"/></symbol>
+      <symbol id="i-pause" viewBox="0 0 24 24"><path d="M9 6v12M15 6v12"/></symbol>
+      <symbol id="i-play" viewBox="0 0 24 24"><path d="M8 5.5v13l10-6.5z"/></symbol>
+      <symbol id="i-undo" viewBox="0 0 24 24"><path d="M9 7 4.5 11.5 9 16"/><path d="M5 11.5h9a5 5 0 0 1 0 10h-2"/></symbol>
+      <symbol id="i-reverse" viewBox="0 0 24 24"><rect x="6" y="3.5" width="12" height="17" rx="1.6"/><path d="m6.5 14 11-6M6.5 18l11-6"/></symbol>
+      <symbol id="i-next" viewBox="0 0 24 24"><path d="M5 12h12M13 7l5 5-5 5"/></symbol>
+      <symbol id="i-plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></symbol>
+      <symbol id="i-search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="6"/><path d="m20 20-4.2-4.2"/></symbol>
+      <symbol id="i-chev-l" viewBox="0 0 24 24"><path d="m14.5 6-6 6 6 6"/></symbol>
+      <symbol id="i-chev-r" viewBox="0 0 24 24"><path d="m9.5 6 6 6-6 6"/></symbol>
+      <symbol id="i-chev-d" viewBox="0 0 24 24"><path d="m6 9.5 6 6 6-6"/></symbol>
+      <symbol id="i-x" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6 6 18"/></symbol>
+      <symbol id="i-vr" viewBox="0 0 24 24"><path d="M3.5 9a2 2 0 0 1 2-2h13a2 2 0 0 1 2 2v6a2 2 0 0 1-2 2h-3.2l-2-2.5h-2.6l-2 2.5H5.5a2 2 0 0 1-2-2z"/></symbol>
+      <symbol id="i-cam" viewBox="0 0 24 24"><rect x="3.5" y="7" width="13" height="10" rx="2"/><path d="m16.5 11 4-2.5v7l-4-2.5"/></symbol>
+      <symbol id="i-grid" viewBox="0 0 24 24"><rect x="4" y="4" width="6.5" height="6.5" rx="1"/><rect x="13.5" y="4" width="6.5" height="6.5" rx="1"/><rect x="4" y="13.5" width="6.5" height="6.5" rx="1"/><rect x="13.5" y="13.5" width="6.5" height="6.5" rx="1"/></symbol>
+      <symbol id="i-download" viewBox="0 0 24 24"><path d="M12 4v11M7.5 10.5 12 15l4.5-4.5M5 19.5h14"/></symbol>
+      <symbol id="i-trash" viewBox="0 0 24 24"><path d="M5 7h14M10 7V5h4v2M7 7l1 12.5h8L17 7"/></symbol>
+      <symbol id="i-spark" viewBox="0 0 24 24"><path d="M12 3c.6 4.6 2.4 6.4 7 7-4.6.6-6.4 2.4-7 7-.6-4.6-2.4-6.4-7-7 4.6-.6 6.4-2.4 7-7z"/></symbol>
+    </defs>
+  </svg>
+
+  <aside class="rail">
+    <div class="logo"><img src="icon.svg" alt=""><span>Mivimoose<b>Rips</b><small>Scanner</small></span></div>
+    <nav id="nav">
+      <button data-tab="scan" class="active"><svg><use href="#i-scan"/></svg><span>Scan</span><kbd>1</kbd></button>
+      <button data-tab="binder"><svg><use href="#i-binder"/></svg><span>Binder</span><kbd>2</kbd></button>
+      <button data-tab="packs"><svg><use href="#i-packs"/></svg><span>Packs</span><kbd>3</kbd></button>
+      <button data-tab="collection"><svg><use href="#i-collection"/></svg><span>Collection</span><kbd>4</kbd></button>
+      <button data-tab="settings"><svg><use href="#i-settings"/></svg><span>Settings</span><kbd>5</kbd></button>
+    </nav>
+    <div class="rail-foot" id="rail-status"></div>
+  </aside>
+
+  <div class="main">
+    <header class="top">
+      <h1 id="page-title">Scan</h1>
+      <button class="set-pill" id="set-pill" data-open-sets><span class="sp-logo"></span><span class="sp-text">Choose a set</span><svg><use href="#i-chev-d"/></svg></button>
+      <div class="top-chips" id="chips"></div>
+    </header>
+
     <!-- ======================= SCAN ======================= -->
     <section class="view active" id="view-scan">
-      <div class="scan-grid">
-        <div class="col-main">
-          <div class="panel camera-panel">
-            <div class="camera-wrap" id="camera-wrap">
-              <img id="camera" alt="Camera view">
-              <div class="camera-empty" id="camera-empty"></div>
-              <div class="camera-status" id="camera-status"></div>
-              <div class="confirm-ring" id="confirm-ring" hidden></div>
-            </div>
-            <div class="controls">
-              <button class="btn btn-lg" id="btn-pause" title="Space">Pause</button>
-              <button class="btn btn-lg" id="btn-undo" title="Z">Undo last</button>
-              <button class="btn btn-lg toggle" id="btn-reverse" title="R">Next card: reverse holo</button>
-              <button class="btn btn-lg btn-primary" id="btn-next" title="N">Next pack</button>
-              <button class="btn btn-lg" id="btn-add" title="A">Add by hand</button>
-            </div>
+      <div class="scan-layout">
+        <div class="stage-col">
+          <div class="stage" id="stage">
+            <img id="camera" alt="Camera view">
+            <div class="stage-empty" id="stage-empty"></div>
+            <div class="brackets" aria-hidden="true"><i></i><i></i><i></i><i></i></div>
+            <div class="live-pill" id="live-pill"></div>
           </div>
-          <div class="panel">
-            <div class="panel-head"><h2>Recent scans</h2><span class="muted small" id="perf"></span></div>
-            <div class="recent" id="recent"></div>
+          <div class="dock">
+            <button class="dock-btn" id="btn-pause" title="Pause / resume (Space)"><svg><use href="#i-pause"/></svg><span>Pause</span></button>
+            <button class="dock-btn" id="btn-undo" title="Remove the last scan (Z)"><svg><use href="#i-undo"/></svg><span>Undo</span></button>
+            <button class="dock-btn toggle" id="btn-reverse" title="The next card is a reverse holo (R)"><svg><use href="#i-reverse"/></svg><span>Next is reverse</span></button>
+            <button class="dock-btn" id="btn-add" title="Add a card by hand (A)"><svg><use href="#i-plus"/></svg><span>Add by hand</span></button>
+            <button class="dock-btn primary" id="btn-next" title="Finish this pack and start the next (N)"><svg><use href="#i-next"/></svg><span>Next pack</span></button>
+          </div>
+          <div class="glass strip-wrap">
+            <div class="row-head"><h3>Recent pulls</h3><span class="muted small" id="perf"></span></div>
+            <div class="strip" id="recent"></div>
           </div>
         </div>
-
-        <div class="col-side">
-          <div class="panel set-card" id="set-card"></div>
-          <div class="panel last-card" id="last-card"></div>
-          <div class="panel" id="pack-card"></div>
-          <div class="panel" id="session-card"></div>
+        <div class="side-col">
+          <div class="glass hero" id="hero"></div>
+          <div class="glass" id="pack"></div>
+          <div class="glass" id="session"></div>
         </div>
       </div>
     </section>
 
-    <!-- ======================= SET PROGRESS ======================= -->
-    <section class="view" id="view-progress">
-      <div class="progress-grid">
-        <aside class="panel set-picker">
-          <input type="search" id="prog-search" placeholder="Search sets…">
-          <div class="row gap">
-            <select id="prog-lang"></select>
-            <label class="check"><input type="checkbox" id="prog-started"> Started only</label>
-          </div>
-          <ul class="set-list" id="prog-sets"></ul>
+    <!-- ======================= BINDER (set progress) ======================= -->
+    <section class="view" id="view-binder">
+      <div class="binder-layout">
+        <aside class="glass set-browser">
+          <label class="search"><svg><use href="#i-search"/></svg><input type="search" id="bs-search" placeholder="Search sets"></label>
+          <div class="seg" id="bs-lang"></div>
+          <label class="check"><input type="checkbox" id="bs-started"> Only sets I've started</label>
+          <ul class="set-list" id="bs-list"></ul>
         </aside>
-        <div class="prog-main" id="prog-main"></div>
+        <div class="binder-main" id="binder-main"></div>
       </div>
     </section>
 
     <!-- ======================= PACKS ======================= -->
     <section class="view" id="view-packs">
-      <div class="panel">
-        <div class="panel-head">
+      <div class="glass">
+        <div class="row-head">
           <h2>Pack tracker</h2>
           <select id="packs-set"></select>
         </div>
-        <div class="stats" id="packs-totals"></div>
+        <div class="tiles" id="packs-tiles"></div>
+      </div>
+      <div class="glass chart-card">
+        <div class="row-head">
+          <div><h2>Pulled value per pack</h2><div class="muted small" id="chart-sub"></div></div>
+          <div class="legend" id="chart-legend"></div>
+        </div>
+        <div class="chart" id="pack-chart"></div>
       </div>
       <div class="pack-list" id="pack-list"></div>
-      <button class="btn more" id="packs-more" hidden>Show more</button>
+      <button class="btn ghost more" id="packs-more" hidden>Show older packs</button>
     </section>
 
     <!-- ======================= COLLECTION ======================= -->
     <section class="view" id="view-collection">
-      <div class="panel">
-        <div class="panel-head">
+      <div class="glass">
+        <div class="row-head">
           <h2>Your collection</h2>
           <div class="row gap">
-            <input type="search" id="col-search" placeholder="Filter cards…">
+            <label class="search"><svg><use href="#i-search"/></svg><input type="search" id="col-search" placeholder="Filter cards"></label>
             <select id="col-sort">
               <option value="value">Most valuable</option>
-              <option value="recent">Recently scanned</option>
+              <option value="recent">Recently pulled</option>
               <option value="name">Name</option>
               <option value="set">Set</option>
             </select>
-            <a class="btn" href="/api/export.csv" id="col-export">Export CSV</a>
+            <a class="btn" href="/api/export.csv"><svg><use href="#i-download"/></svg>Export CSV</a>
           </div>
         </div>
-        <div class="stats" id="col-totals"></div>
+        <div class="tiles" id="col-tiles"></div>
       </div>
       <div class="card-grid" id="col-grid"></div>
     </section>
 
     <!-- ======================= SETTINGS ======================= -->
     <section class="view" id="view-settings">
-      <div class="settings" id="settings"></div>
+      <div class="settings-layout">
+        <nav class="glass settings-nav" id="settings-nav"></nav>
+        <div class="settings-body" id="settings"></div>
+      </div>
     </section>
-  </main>
+  </div>
 
-  <!-- set chooser -->
   <dialog id="set-dialog" class="dialog wide">
     <div class="dialog-head">
-      <h2>Which set are you opening?</h2>
-      <button class="btn btn-ghost" data-close>✕</button>
+      <h2>What are you opening?</h2>
+      <button class="icon-btn" data-close aria-label="Close"><svg><use href="#i-x"/></svg></button>
     </div>
-    <div class="row gap">
-      <input type="search" id="set-search" placeholder="Search sets (name, series, year)…" autofocus>
-      <select id="set-lang"></select>
+    <div class="row gap wrap">
+      <label class="search grow"><svg><use href="#i-search"/></svg><input type="search" id="set-search" placeholder="Search by set, series or year" autofocus></label>
+      <div class="seg" id="set-lang"></div>
     </div>
     <div class="set-choices" id="set-choices"></div>
   </dialog>
 
-  <!-- manual add / correct -->
   <dialog id="add-dialog" class="dialog">
     <div class="dialog-head">
       <h2 id="add-title">Add a card by hand</h2>
-      <button class="btn btn-ghost" data-close>✕</button>
+      <button class="icon-btn" data-close aria-label="Close"><svg><use href="#i-x"/></svg></button>
     </div>
     <div class="row gap">
-      <input type="search" id="add-search" placeholder="Card name or number…">
+      <label class="search grow"><svg><use href="#i-search"/></svg><input type="search" id="add-search" placeholder="Card name or number"></label>
       <label class="check"><input type="checkbox" id="add-anyset"> All sets</label>
     </div>
     <div class="add-results" id="add-results"></div>
   </dialog>
 
-  <!-- card detail -->
   <dialog id="card-dialog" class="dialog"></dialog>
 
+  <div class="tooltip" id="tooltip" hidden></div>
   <div class="toasts" id="toasts"></div>
   <div class="celebrate" id="celebrate" hidden></div>
-
   <script src="app.js"></script>
 </body>
 </html>

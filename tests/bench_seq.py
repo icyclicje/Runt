@@ -69,6 +69,8 @@ def run_trial(det, rng, target, table_in, table_out, art_pool, hard, sens, mode,
         dets = det.analyze(img, mode=mode)
         for key, d in tr.update(dets, i / FPS, thr, 0.5, 1.2, min_s):
             confirmed.append((key, i - first_held))
+            run_trial.why = getattr(run_trial, 'why', {})
+            run_trial.why[key] = (i, held, d, [x for x in dets], img)
         times.append(time.perf_counter() - t0)
         if held and target is not None:
             mine = [d for d in dets if d.key == target[0]]
@@ -90,6 +92,9 @@ def main():
     ap.add_argument('--mode', default='auto')
     ap.add_argument('--seed', type=int, default=1)
     ap.add_argument('--verbose', action='store_true', help='explain misses and save a frame of each')
+    ap.add_argument('--mix', action='store_true', help='draw the cards shown from all --sets, not just the first')
+    ap.add_argument('--rare', action='store_true', help='only show ex / full art / illustration / gold cards')
+    ap.add_argument('--lookalike', action='store_true', help='only show cards that have a same-name sibling')
     a = ap.parse_args()
     cv2.setNumThreads(4)                         # same as the app
 
@@ -102,9 +107,21 @@ def main():
     det.load(ixs)
     rng = np.random.default_rng(a.seed)
 
-    in_cards = [c for c in db.get_set(sets[0]).cards if c.img]
+    pool_sets = sets if a.mix else sets[:1]
+    in_cards = [c for sid in pool_sets for c in db.get_set(sid).cards if c.img]
+    if a.rare:                                   # modern special cards only: ex, full art, IR, SIR, gold...
+        in_cards = [c for c in in_cards if c.is_hit or 'double' in (c.rarity or '').lower()]
+    if a.lookalike:                              # cards with a same-name sibling in their set (gold vs full art...)
+        names = {}
+        for c in in_cards:
+            names.setdefault((c.set_id, c.name), []).append(c)
+        in_cards = [c for v in names.values() if len(v) > 1 and any(x.is_hit for x in v) for c in v]
+        print(f'   {len(in_cards)} look-alike cards')
     out_cards = [c for c in db.get_set(a.other).cards if c.img]
     pick_in = [in_cards[i] for i in rng.choice(len(in_cards), min(len(in_cards), a.n + 30), replace=False)]
+    if len(pick_in) < a.n + 30:                  # small pools (look-alikes): reuse, table cards from anywhere
+        extra = [c for c in db.get_set(sets[0]).cards if c.img and c not in pick_in]
+        pick_in += [extra[i] for i in rng.choice(len(extra), a.n + 30 - len(pick_in), replace=False)]
     pick_out = [out_cards[i] for i in rng.choice(len(out_cards), 30, replace=False)]
     imgs_in = list(color_images(pick_in).items())
     imgs_out = list(color_images(pick_out).items())
@@ -121,6 +138,7 @@ def main():
         if a.multi:
             multi = [imgs_in[(trial * 5 + j) % len(imgs_in)] for j in range(int(rng.integers(3, 6)))]
             table_in = []
+        run_trial.why = {}
         conf, times = run_trial(det, rng, target, table_in, table_out, art_pool, a.hard, a.sens, a.mode, multi)
         all_times += times
         allowed = {k for k, _ in table_in} | ({k for k, _ in multi} if multi else {target[0]})
@@ -152,8 +170,15 @@ def main():
                     cv2.imwrite(os.path.join(a.cache, f'miss_{trial}.jpg'), tr_[len(tr_) // 2][3])
         for b in bad:
             print('   FALSE SCAN:', b, '(target', target[0], ')')
+            if a.verbose and b in getattr(run_trial, 'why', {}):
+                from app.detector import features_of
+                i, held, d, dets, img = run_trial.why[b]
+                print(f'      frame {i} (held={held}): {d!r} features {np.round(features_of(d), 2).tolist()} '
+                      f'area {d.area:.0f}; all: {dets}')
+                cv2.imwrite(os.path.join(a.cache, f'false_{trial}.jpg'), img)
     ms = 1000 * np.array(all_times)
-    label = f'{"multi" if a.multi else "handheld"}{" hard" if a.hard else ""} [{a.sens}, {a.mode}] sets={a.sets}'
+    label = (f'{"multi" if a.multi else "handheld"}{" hard" if a.hard else ""}{" rare" if a.rare else ""}'
+             f' [{a.sens}, {a.mode}] sets={a.sets}{" (mixed)" if a.mix else ""}')
     if a.multi:
         print(f'{label}: scanned {got_multi}/{expected_multi} cards laid out together ({got_multi / max(1, expected_multi):.1%}), '
               f'false scans {false}')

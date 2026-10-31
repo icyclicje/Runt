@@ -74,8 +74,12 @@ DEFAULTS = {
     'snd_pack': True,
     'snd_milestone': True,
     'snd_ignored': False,
+    'snd_reading': True,           # soft tick when a card starts being read
+    'snd_ui': True,                # clicks and swishes in the app and on the VR panel
     'hit_value': 5.0,
     'big_hit_value': 50.0,
+    'jackpot_value': 100.0,        # 'really expensive': plays the jackpot sound
+    'jackpot_sound': 'gunshot',
     'voice': 'off',                # off | price | name_price | hits
     'voice_rate': 1,
     # display
@@ -110,6 +114,7 @@ CHOICES = {
     'duplicates': ['count', 'ignore'],
     'default_variant': ['normal', 'reverse', 'holo'],
     'voice': ['off', 'price', 'name_price', 'hits'],
+    'jackpot_sound': ['gunshot', 'explosion', 'cash', 'airhorn', 'laser', 'fanfare'],
     'currency': ['USD', 'CAD', 'EUR', 'GBP', 'AUD', 'JPY', 'MXN', 'NZD'],
     'price_basis': ['market', 'scan'],
     'hud_mode': ['world', 'head', 'left', 'right'],
@@ -117,7 +122,7 @@ CHOICES = {
 
 RANGES = {
     'camera_fps': (5, 60), 'guide_size': (0.3, 0.98), 'max_cards': (1, 10), 'rescan_gap': (0.2, 10), 'max_fps': (2, 60),
-    'pack_size': (0, 40), 'volume': (0, 1), 'hit_value': (0, 100000), 'big_hit_value': (0, 100000),
+    'pack_size': (0, 40), 'volume': (0, 1), 'hit_value': (0, 100000), 'big_hit_value': (0, 100000), 'jackpot_value': (0, 1000000),
     'voice_rate': (-5, 5), 'hud_width': (0.15, 1.5), 'hud_distance': (0.3, 3), 'hud_height': (-1, 1),
     'hud_opacity': (0.2, 1), 'hud_fps': (2, 30), 'refresh_hours': (0, 720), 'port': (1024, 65535),
     'camera_exposure': (-13, 0),

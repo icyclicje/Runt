@@ -17,6 +17,7 @@ the tracker accumulates over frames.
 from __future__ import annotations
 
 import concurrent.futures as cf
+import math
 
 import cv2
 import numpy as np
@@ -26,12 +27,14 @@ from . import features, vision
 
 class Detection:
     """One card seen in one frame."""
-    __slots__ = ('key', 'quad', 'score', 'inliers', 'spread', 'source', 'strength', 'sharp', 'cands', 'glare', 'area')
+    __slots__ = ('key', 'quad', 'score', 'inliers', 'spread', 'source', 'strength', 'sharp', 'cands', 'glare', 'area',
+                 'matched')
 
     def __init__(self, key, quad, score, inliers, spread, source, cands, sharp, glare, area):
         self.key, self.quad, self.score, self.inliers, self.spread = key, quad, score, inliers, spread
         self.source, self.cands, self.sharp, self.glare, self.area = source, cands, sharp, glare, area
         self.strength = 0.0
+        self.matched = inliers
 
     def __repr__(self):
         return f'<{self.key} {self.source} s={self.strength:.2f} fp={self.score:.2f} inl={self.inliers}>'
@@ -41,22 +44,38 @@ def _clip01(x: float) -> float:
     return 0.0 if x < 0 else 1.0 if x > 1 else x
 
 
-def strength_of(d: Detection) -> float:
-    """How convincing one sighting is (0 = not at all, 1 = certain), from three
-    independent signals measured on synthetic camera footage:
-      fingerprint  right card ≥0.7 in 95% of frames, a wrong card usually <0.3
-      inliers      keypoints that line up: right card 20-300, a wrong card ~8-20
-      spread       how much of the card those keypoints cover
-    """
-    fp = _clip01((d.score - 0.40) / 0.40)
+def features_of(d: Detection) -> list[float]:
+    """Measurements of a sighting that tell right from wrong (inputs of strength_of)."""
+    others = [s for k, s in (d.cands or []) if k != d.key]
+    margin = d.score - max(others) if others else 0.5
+    inl = math.log1p(max(0, d.inliers))
     if d.source == 'kp':
-        inl = _clip01((d.inliers - 8) / 40)
-        spr = _clip01((d.spread - 0.12) / 0.30)
-        s = fp * (0.45 + 0.55 * inl) * (0.6 + 0.4 * spr)
-    else:                                   # outline: inliers counted between the straightened card and its scan
-        inl = _clip01((d.inliers - 18) / 60)
-        s = fp * (0.35 + 0.65 * inl) if d.inliers >= 18 else 0.0
-    return float(s)
+        return [1.0, inl, d.score, margin, d.spread, d.inliers / max(1, d.matched)]
+    return [1.0, inl, d.score, margin]
+
+
+# Logistic models of "this sighting names the right card", over features_of().
+# Outline weights: fitted by tests/calibrate.py (stable across runs: AUC ~0.97).
+# Keypoint weights: set by hand from the calibration data, because wrong keypoint
+# sightings are too rare to fit (14 in 1200 frames): many agreeing keypoints carry
+# the decision, and a fingerprint that clearly prefers another card vetoes it.
+KP_WEIGHTS = np.array([-6.0, 2.0, 6.0, 20.0, 2.0, 0.0])     # 1, log(1+inliers), score, margin, spread, ratio
+EDGE_WEIGHTS = np.array([-9.0, 1.9, 5.8, 20.0])            # 1, log(1+inliers), score, margin
+EDGE_CAP = 0.75                                            # an outline-only card always needs 2+ sightings
+
+
+def strength_of(d: Detection) -> float:
+    """How convincing one sighting is, 0..1: the model's probability, rescaled so that
+    anything below 25% counts for nothing."""
+    w = KP_WEIGHTS if d.source == 'kp' else EDGE_WEIGHTS
+    z = float(np.dot(w, features_of(d)))
+    p = 1.0 / (1.0 + math.exp(-max(-30.0, min(30.0, z))))
+    s = _clip01((p - 0.25) / 0.75)
+    if d.source == 'kp':
+        return s
+    # An outline match only counts once keypoints back it up: during motion blur the
+    # fingerprint alone can be fooled several frames running (seen as false scans).
+    return min(s, EDGE_CAP) * _clip01((d.inliers - 8) / 16)
 
 
 def _glare(canon: np.ndarray) -> float:
@@ -121,7 +140,8 @@ class Detector:
     # ---------------------------------------------------------------- main entry
 
     def analyze(self, gray: np.ndarray, mode: str = 'auto', guide_size: float = 0.8, use_keypoints: bool = True,
-                max_cards: int = 6) -> list[Detection]:
+                max_cards: int = 6, keep_all: bool = False) -> list[Detection]:
+        """keep_all: also return sightings too weak to count (for calibration)."""
         if not len(self.matcher):
             return []
         # The two methods are independent until they're merged: run them side by side
@@ -151,8 +171,9 @@ class Detector:
                             quad, qd, cands, rows, canon, score = q2, qd2, cands2, rows2, canon2, s2
                 d = Detection(h.key, quad, score, h.inliers, h.spread, 'kp', cands, vision.sharpness(canon),
                               _glare(canon), abs(cv2.contourArea(quad)))
+                d.matched = h.matched
                 d.strength = strength_of(d)
-                if d.strength > 0:
+                if d.strength > 0 or keep_all:
                     dets.append(d)
 
         # outline findings the keypoints didn't already explain
@@ -175,9 +196,9 @@ class Detector:
             d = Detection(key, q, score, inl, 0.0, src, cands, vision.sharpness(canon), _glare(canon),
                           abs(cv2.contourArea(q)))
             d.strength = strength_of(d)
-            if d.strength > 0:
+            if d.strength > 0 or keep_all:
                 dets.append(d)
-            elif src == 'edge' and geo > 0.3:
+            if d.strength <= 0 and src == 'edge' and geo > 0.3:
                 unknown.append((q, d.sharp, d.glare))
         self.last_unknown = [u for u in unknown if not any(features._overlap(u[0], d.quad) > 0.5 for d in dets)]
 

@@ -36,7 +36,7 @@ def steamvr_running() -> bool:
         return False
 
 
-def vr_check(out_dir: str, system=None) -> dict:
+def vr_check(out_dir: str | None, system=None, grab: bool = True, save: bool = True) -> dict:
     """What SteamVR offers this app: headset, controllers, and whether its camera can be read.
 
     Uses the given connection, or opens a temporary one in 'background' mode (which
@@ -75,7 +75,7 @@ def vr_check(out_dir: str, system=None) -> dict:
         except Exception as e:
             rep['camera_present'] = False
             rep['camera_error'] = str(e)
-        if rep['camera_present']:
+        if rep['camera_present'] and grab:
             sizes = {}
             for name, ft in (('distorted', openvr.VRTrackedCameraFrameType_Distorted),
                              ('undistorted', openvr.VRTrackedCameraFrameType_Undistorted),
@@ -102,13 +102,17 @@ def vr_check(out_dir: str, system=None) -> dict:
                 if hdr is not None:
                     fw, fh, bpp = hdr.nWidth or w, hdr.nHeight or h, hdr.nBytesPerPixel or 4
                     img = np.frombuffer(buf, np.uint8, count=fw * fh * bpp).reshape(fh, fw, bpp)
-                    import cv2
-                    path = os.path.join(out_dir, 'vr-camera-test.jpg')
-                    cv2.imwrite(path, cv2.cvtColor(img, cv2.COLOR_RGBA2BGR) if bpp == 4 else img)
-                    rep['camera_frame'] = {'width': fw, 'height': fh, 'bytes_per_pixel': bpp, 'saved': path,
+                    rep['camera_frame'] = {'width': fw, 'height': fh, 'bytes_per_pixel': bpp,
                                            'mean_brightness': float(img[:, :, :3].mean())}
+                    if save and out_dir:
+                        import cv2
+                        path = os.path.join(out_dir, 'vr-camera-test.jpg')
+                        cv2.imwrite(path, cv2.cvtColor(img, cv2.COLOR_RGBA2BGR) if bpp == 4 else img)
+                        rep['camera_frame']['saved'] = path
                 else:
                     rep['camera_frame'] = None
+                    rep['camera_note'] = ('SteamVR says the headset has a camera but sends no pictures to apps '
+                                          '(the Steam Frame does this; see github.com/ValveSoftware/openvr/issues/1926).')
             except Exception as e:
                 rep['camera_error'] = str(e)
     except Exception as e:
@@ -238,10 +242,10 @@ class VRManager:
             self.ov.setOverlayMouseScale(self.dash_handle, self._vec2(*hud.DASH_SIZE))
             if os.path.exists(self.icon_path):
                 self.ov.setOverlayFromFile(self.thumb_handle, os.path.abspath(self.icon_path))
-            try:
-                self.has_camera = bool(openvr.VRTrackedCamera().hasCamera(openvr.k_unTrackedDeviceIndex_Hmd))
-            except Exception:
-                self.has_camera = False
+            # "has a camera" isn't enough (the Steam Frame says yes but never sends frames):
+            # only count the headset camera once a real frame arrives
+            self.has_camera = False
+            threading.Thread(target=self._probe_camera, name='vr-camera-probe', daemon=True).start()
             self.connected = True
             self.status = 'Connected to SteamVR'
             self._world_pose = None
@@ -272,6 +276,14 @@ class VRManager:
         self.status = why
         self.bus.emit('vr', **self.info())
         self._notify_engine()
+
+    def _probe_camera(self):
+        rep = vr_check(None, self.system, grab=True, save=False)
+        usable = bool(rep.get('camera_frame'))
+        if usable != self.has_camera:
+            self.has_camera = usable
+            log.info('headset camera usable by apps: %s (%s)', usable, rep.get('camera_error') or rep.get('camera_wait') or '')
+            self._notify_engine()
 
     def _notify_engine(self):
         """Let the engine switch cameras; its problems are not connection problems."""
@@ -394,6 +406,8 @@ class VRManager:
 
     def _action(self, bid: str):
         e, s = self.engine, self.settings
+        if s['snd_ui']:
+            e.sounds.play('click')
         if bid == 'undo':
             e.undo()
         elif bid == 'reverse':

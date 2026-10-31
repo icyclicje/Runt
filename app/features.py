@@ -183,7 +183,7 @@ class FeatureIndex:
             return []
         rows = np.concatenate([np.arange(self.off[c], self.off[c + 1]) for c in cand])
         sub_card = self.card_of[rows]
-        pairs = cv2.BFMatcher(cv2.NORM_HAMMING).knnMatch(qdes, self.des[rows], k=2)
+        pairs = _knn2(qdes, np.ascontiguousarray(self.des[rows]))
         qi, ti = [], []
         for p in pairs:
             if not p:
@@ -239,6 +239,37 @@ class FeatureIndex:
             hits.append(FeatHit(self.keys[c], quad.astype(np.float32), n_in, int(votes[c]), Hs, spread, int(sel.sum())))
         hits.sort(key=lambda h: -h.inliers)
         return hits
+
+
+_knn_failures = 0
+
+
+def _knn2(q: np.ndarray, t: np.ndarray):
+    """Two nearest neighbours by Hamming distance. OpenCV's matcher has thrown an
+    'unknown C++ exception' on rare inputs (not reproducible in 3000 random trials),
+    so on failure the query is retried in small pieces and a bad piece is skipped
+    instead of losing the whole frame."""
+    global _knn_failures
+    bf = cv2.BFMatcher(cv2.NORM_HAMMING)
+    try:
+        return bf.knnMatch(np.ascontiguousarray(q), t, k=2)
+    except cv2.error:
+        _knn_failures += 1
+        if _knn_failures <= 3:
+            import logging
+            logging.getLogger(__name__).warning('matcher error on %s x %s descriptors; retrying in pieces', q.shape, t.shape)
+    out = []
+    for i in range(0, len(q), 256):
+        part = np.ascontiguousarray(q[i:i + 256])
+        try:
+            res = bf.knnMatch(part, t, k=2)
+        except cv2.error:
+            continue
+        for p in res:                       # keep query indexes relative to the whole frame
+            for m in p:
+                m.queryIdx += i
+        out.extend(res)
+    return out
 
 
 def _overlap(a: np.ndarray, b: np.ndarray) -> float:

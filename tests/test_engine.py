@@ -81,7 +81,7 @@ def main():
         e._on_confirm(a.key, Rec(a.key))                       # owned already, new pack
         last = e.store.last_scan()
         check('owned card in a new pack is a duplicate', last['dupe'] == 1 and last['card_key'] == a.key)
-        check('duplicate sound', snd.played[-1] in ('dupe', 'hit'))
+        check('duplicate sound', snd.played[-1] in ('dupe', 'hit', 'big', 'jackpot'))
         check('voice says duplicate', snd.said[-1].startswith('Duplicate'))
 
         # undo the duplicate, then undo the card that completed pack 1: pack 1 must reopen
