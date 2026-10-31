@@ -105,6 +105,7 @@ def main():
     ixs = [store.load(s) or store.build(db.get_set(s)) for s in sets]
     det = Detector()
     det.load(ixs)
+    det.preferred_sets = sets                    # like the app: reprints reported from the first set listed
     rng = np.random.default_rng(a.seed)
 
     pool_sets = sets if a.mix else sets[:1]
@@ -142,6 +143,7 @@ def main():
         conf, times = run_trial(det, rng, target, table_in, table_out, art_pool, a.hard, a.sens, a.mode, multi)
         all_times += times
         allowed = {k for k, _ in table_in} | ({k for k, _ in multi} if multi else {target[0]})
+        allowed = set().union(*(det.equivalents(k) for k in allowed))     # reprints count as the same card
         keys = [k for k, _ in conf]
         bad = [k for k in keys if k not in allowed]
         false += len(bad)
@@ -153,7 +155,7 @@ def main():
             if len(got) < len(want):
                 misses.append(('multi', len(want) - len(got)))
         else:
-            hits = [f for k, f in conf if k == target[0]]
+            hits = [f for k, f in conf if k in det.equivalents(target[0])]
             if hits:
                 found += 1
                 lats.append(hits[0])

@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import concurrent.futures as cf
 import math
+import time
 
 import cv2
 import numpy as np
@@ -78,6 +79,31 @@ def strength_of(d: Detection) -> float:
     return min(s, EDGE_CAP) * _clip01((d.inliers - 8) / 16)
 
 
+def _same_region(a: np.ndarray, b: np.ndarray) -> bool:
+    """Two quads covering (almost) the same area."""
+    aa, ab = abs(cv2.contourArea(a)), abs(cv2.contourArea(b))
+    return 0.85 < aa / max(ab, 1e-6) < 1.18 and features._overlap(a, b) > 0.85
+
+
+def _reprints(m: vision.Matcher, min_sim: float = 0.85) -> dict[str, list[str]]:
+    """Cards printed in more than one loaded set with the same artwork: same name, and
+    fingerprints so close the camera can't tell them apart."""
+    by_name: dict[str, list[int]] = {}
+    for i, k in enumerate(m.keys):
+        set_id, _, name = k.split('|', 2)
+        by_name.setdefault(name.split('#')[0].strip().lower(), []).append(i)
+    out: dict[str, list[str]] = {}
+    for idx in by_name.values():
+        if len(idx) < 2:
+            continue
+        sims = m.desc[idx] @ m.desc[idx].T
+        for a, i in enumerate(idx):
+            for b, j in enumerate(idx):
+                if a != b and sims[a, b] >= min_sim and m.keys[i].split('|', 1)[0] != m.keys[j].split('|', 1)[0]:
+                    out.setdefault(m.keys[i], []).append(m.keys[j])
+    return out
+
+
 def _glare(canon: np.ndarray) -> float:
     """Share of the card that is blown out to white (shiny cards under a lamp)."""
     return float((canon >= 250).mean())
@@ -92,10 +118,25 @@ class Detector:
         # card-shaped outlines in the last frame that matched nothing: [(quad, sharpness, glare)]
         self.last_unknown: list = []
         self.snap_edges = True
+        self._zoom_misses: list = []                 # recent zooms that found nothing: [(quad, time)]
+        self.partners: dict[str, list[str]] = {}     # reprints: same card, same artwork, another set
+        self.preferred_sets: list[str] = []          # which version of a reprint to report (the set being opened first)
+
+    def canonical(self, key: str) -> str:
+        """For a reprint, the version from the preferred sets (identical prints can't be told apart)."""
+        alts = self.partners.get(key)
+        if not alts or not self.preferred_sets:
+            return key
+        rank = {s: i for i, s in enumerate(self.preferred_sets)}
+        return min([key] + alts, key=lambda k: (rank.get(k.split('|', 1)[0], len(rank)), k != key))
+
+    def equivalents(self, key: str) -> set[str]:
+        return {key, *self.partners.get(key, ())}
 
     def load(self, indexes) -> None:
         m = vision.Matcher()
         m.load(indexes)
+        self.partners = _reprints(m)
         keys, pts, des = [], [], []
         for ix in indexes:
             for i, k in enumerate(ix.keys):
@@ -137,6 +178,53 @@ class Detector:
                 out.append((q, src, geo, qd, cands, rows, canon))
         return out
 
+    def _kp_stage(self, gray, max_cards):
+        """Keypoints of the frame and the cards they match (runs beside the outline method)."""
+        feats = features.frame_features(gray)
+        return self.findex.detect(gray, max_cards=max_cards, feats=feats), feats
+
+    def _kp_detection(self, gray, h, edges) -> Detection:
+        """A keypoint hit, double-checked against its card's fingerprint and scored."""
+        quad = vision.order_quad(h.quad)
+        qd, cands, rows, canon = self._fingerprint(gray, quad)
+        score = self._score_for(qd, h.key)
+        if edges and self.snap_edges:
+            # corners projected from keypoints in the artwork can drift a little:
+            # try the outline snapped onto the card's real edges, keep what matches better
+            q2 = vision.order_quad(edges[0].snap(quad))
+            if not np.allclose(q2, quad, atol=1.0):
+                qd2, cands2, rows2, canon2 = self._fingerprint(gray, q2)
+                s2 = self._score_for(qd2, h.key)
+                if s2 > score:
+                    quad, qd, cands, rows, canon, score = q2, qd2, cands2, rows2, canon2, s2
+        d = Detection(h.key, quad, score, h.inliers, h.spread, 'kp', cands, vision.sharpness(canon),
+                      _glare(canon), abs(cv2.contourArea(quad)))
+        d.matched = h.matched
+        d.strength = strength_of(d)
+        return d
+
+    def _zoom(self, gray, quad, extra):
+        """Keypoint-match one small region again at full resolution, enlarged so the card is ~420 px long."""
+        h, w = gray.shape[:2]
+        (x0, y0), (x1, y1) = quad.min(0), quad.max(0)
+        side = max(x1 - x0, y1 - y0)
+        pad = 0.25 * side
+        X0, Y0 = int(max(0, x0 - pad)), int(max(0, y0 - pad))
+        X1, Y1 = int(min(w, x1 + pad)), int(min(h, y1 + pad))
+        if X1 - X0 < 16 or Y1 - Y0 < 16:
+            return []
+        crop = gray[Y0:Y1, X0:X1]
+        f = min(3.0, 420.0 / max(1.0, side))
+        if f > 1.05:
+            crop = cv2.resize(crop, None, fx=f, fy=f, interpolation=cv2.INTER_CUBIC)
+        else:
+            f = 1.0
+        feats = features.frame_features(crop, max_side=max(crop.shape), budget=1500)
+        hits = self.findex.detect(crop, max_cards=1, feats=feats, extra=extra)
+        for hh in hits:
+            hh.quad = (hh.quad / f + np.float32([X0, Y0])).astype(np.float32)
+        return hits
+
     # ---------------------------------------------------------------- main entry
 
     def analyze(self, gray: np.ndarray, mode: str = 'auto', guide_size: float = 0.8, use_keypoints: bool = True,
@@ -146,35 +234,42 @@ class Detector:
             return []
         # The two methods are independent until they're merged: run them side by side
         # (OpenCV releases the interpreter lock, so this is real parallelism).
-        kp_feats = self._pool.submit(features.frame_features, gray) if use_keypoints and self.findex else None
+        kp_job = self._pool.submit(self._kp_stage, gray, max_cards) if use_keypoints and self.findex else None
         edges: list = []
         outline = self._outline_candidates(gray, mode, guide_size, edges_out=edges)
         dets: list[Detection] = []
 
-        if kp_feats is not None:
-            extra = []
-            for o in outline[:3]:
-                extra.extend(k for k, _ in o[4][:2])
-            hits = self.findex.detect(gray, max_cards=max_cards, feats=kp_feats.result(), extra=extra)
+        if kp_job is not None:
+            hits, feats = kp_job.result()
+            # a quick second look for cards the outline matcher suspects but keypoints didn't find
+            # (cheap: matching against at most six cards' keypoints)
+            found = {h.key for h in hits}
+            extra = [k for o in outline[:3] for k, _ in o[4][:2] if k not in found]
+            if extra and feats[1] is not None:
+                more = self.findex.detect(gray, max_cards=max_cards, feats=feats, extra=extra, only_extra=True)
+                hits += [h for h in more if not any(features._overlap(h.quad, x.quad) > 0.5 for x in hits)]
             for h in hits:
-                quad = vision.order_quad(h.quad)
-                qd, cands, rows, canon = self._fingerprint(gray, quad)
-                score = self._score_for(qd, h.key)
-                if edges and self.snap_edges:
-                    # corners projected from keypoints in the artwork can drift a little:
-                    # try the outline snapped onto the card's real edges, keep what matches better
-                    q2 = vision.order_quad(edges[0].snap(quad))
-                    if not np.allclose(q2, quad, atol=1.0):
-                        qd2, cands2, rows2, canon2 = self._fingerprint(gray, q2)
-                        s2 = self._score_for(qd2, h.key)
-                        if s2 > score:
-                            quad, qd, cands, rows, canon, score = q2, qd2, cands2, rows2, canon2, s2
-                d = Detection(h.key, quad, score, h.inliers, h.spread, 'kp', cands, vision.sharpness(canon),
-                              _glare(canon), abs(cv2.contourArea(quad)))
-                d.matched = h.matched
-                d.strength = strength_of(d)
+                d = self._kp_detection(gray, h, edges)
                 if d.strength > 0 or keep_all:
                     dets.append(d)
+            # Small cards have too few keypoints at the reduced size used above: look again at
+            # small card-shaped outlines nothing explains yet, cropped from the full frame and enlarged.
+            # (costly: at most two per frame, only card-sized shapes that could be a known card)
+            frame_area = gray.shape[0] * gray.shape[1]
+            small = [o for o in outline if o[1] == 'edge' and abs(cv2.contourArea(o[0])) < 0.15 * frame_area
+                     and not any(features._overlap(o[0], d.quad) > 0.5 and d.strength >= 0.5 for d in dets)]
+            now = time.time()
+            self._zoom_misses = [(q, t) for q, t in self._zoom_misses if now - t < 0.6]
+            small = [o for o in small if not any(_same_region(o[0], q) for q, _ in self._zoom_misses)]
+            for o in sorted(small, key=lambda o: -o[2])[:2]:
+                zh = self._zoom(gray, o[0], [k for k, _ in o[4][:3]])
+                if not zh:                                # nothing there: don't look again for a moment
+                    self._zoom_misses.append((o[0], now))
+                for h in zh:
+                    d = self._kp_detection(gray, h, edges)
+                    if (d.strength > 0 or keep_all) and not any(features._overlap(d.quad, x.quad) > 0.5 for x in dets):
+                        d.source = 'kp'
+                        dets.append(d)
 
         # outline findings the keypoints didn't already explain
         unknown = []
@@ -202,6 +297,8 @@ class Detector:
                 unknown.append((q, d.sharp, d.glare))
         self.last_unknown = [u for u in unknown if not any(features._overlap(u[0], d.quad) > 0.5 for d in dets)]
 
+        for d in dets:
+            d.key = self.canonical(d.key)
         dets.sort(key=lambda d: -d.strength)
         out: list[Detection] = []
         for d in dets:                                    # one finding per physical card

@@ -1,113 +1,139 @@
 # MivimooseRips Scanner
 
-A Windows app that scans the Pokémon cards you pull from packs, prices them using the
-MivimooseRips card database, and tracks your packs and set progress. While you wear a
-Steam Frame (or any SteamVR headset) linked to the PC, it shows a floating panel in VR.
+A Windows app that scans the Pokémon cards you pull, prices them using the
+MivimooseRips card database, and tracks your packs and set progress. With a Steam
+Frame (or any SteamVR headset) linked to the PC, its panels float in your room: touch
+them to press buttons and grab them to move them.
 
 `dist\MivimooseScanner.exe` is the whole app. There's nothing to install.
 
 ## Quick start
 
 1. Run `MivimooseScanner.exe`. The first start downloads the card database (about 7 MB).
-2. Choose the set you're opening. The scanner then downloads that set's card images once
-   (about 10–20 seconds), so it can recognise every card in it.
-3. Hold each card up to the camera, face out, until you hear the chime. That's it:
-   - a **new card** is added to your collection,
-   - a card you **already own** is flagged **DUPLICATE**, with its own sound,
-   - the **same card shown twice in one pack** is ignored, so it's never counted twice,
+2. Choose the set you're opening. That set's card images download once (10–20 seconds).
+3. Hold each card up to the camera, face out. It's recognised in a fraction of a second:
+   - a **new card** goes into your collection,
+   - a card you **already own** is flagged **DUPLICATE**,
+   - the **same card shown twice in one pack** is ignored (never counted twice),
    - when the pack's card count is reached, the **pack is marked done** (with value
-     against what you paid), and the next pack starts.
+     against what you paid) and the next pack starts.
 
-## Using it with the Steam Frame
+You can also lay several new cards under the camera at once: they're all scanned together.
 
-1. Install **SteamVR** on this PC (Steam → Library → Tools → SteamVR). It isn't installed yet.
-2. Link the Steam Frame to the PC (Steam Link / PC VR streaming) so SteamVR is running.
-3. Start the scanner, before or after SteamVR. Within a few seconds you'll see:
-   - a **floating panel**: last card, price, NEW/DUPLICATE, pack progress, set progress,
-     camera view, and buttons (Undo · Reverse · Next pack · Pause),
-   - a **"MivimooseRips Scanner" tab in the SteamVR dashboard**: a bigger control panel
-     (panel position, recenter, camera view, voice on/off).
-4. Prices can also be read aloud (Settings → Sounds & voice), so you don't have to look.
+## The camera
 
-### Which camera does the scanning?
+**Use a webcam** pointed at where you open packs, such as a Logitech C270 on a stand or a
+phone used as a webcam. It's the steadiest setup and leaves your hands free.
 
-- **Headset camera:** chosen automatically if SteamVR offers the headset's camera to apps.
-  Turn it on in SteamVR Settings → Video → Camera. **It's not confirmed that the
-  Steam Frame's passthrough cameras are available to PC apps.** If the scanner says
-  "SteamVR reports no headset camera", use a webcam instead. The Steam Frame's built-in
-  cameras are black-and-white; the scanner works in greyscale, so that's fine if they're
-  available.
-- **Any webcam:** for example your Logi C270 on a stand, pointing at where you open packs.
-  This is often the most reliable setup: steady, sharp, and your hands are free. Pick it in
-  Settings → Camera.
+**The Steam Frame's own cameras can't be used yet.** SteamVR says the headset has a
+camera, but it sends no pictures to PC apps. The `camera/enableCamera` setting doesn't
+change that. This has been reported to Valve
+([OpenVR issue #1926](https://github.com/ValveSoftware/openvr/issues/1926)). The
+scanner checks for real frames, and on *Automatic* it uses your webcam instead and says
+why. Headsets that do share their camera through SteamVR, like the Valve Index, work.
+Settings → VR headset → **Run VR check** shows what your headset offers.
 
-## Tips for fast, accurate scans
+## In VR
 
-- Fill roughly a third to half of the camera view with the card, and hold it still for half a second.
-- A plain, darker background behind the card works best. Avoid strong glare on holos
-  (Settings → Camera → Exposure can help).
-- If your camera struggles to find card edges, set **Finding the card** to
-  *Automatic, else guide box* and hold the card so it fills the box.
-- **Reverse holos** can't be told apart reliably by a camera. Press **Reverse** (or `R`)
-  before scanning one, or fix it afterwards with the Normal / Reverse holo / Holo buttons.
-- Wrong card? Click **Wrong card?** or pick one of the suggested look-alikes.
+1. Install SteamVR, link the Steam Frame to the PC, and start the scanner (before or
+   after SteamVR).
+2. Turn on the headset's passthrough to see your room. The panels then float in it:
+   - **Scanner panel:** last pull, price, NEW/DUPLICATE, live reading progress, tips,
+     camera view, and the Undo · Reverse · Pause · Next pack buttons.
+   - **Pack panel:** the current pack's cards, large, with value against cost. Put it on
+     the table.
+   - **Spotlight:** each card you pull pops up large above the scanner panel. Big hits
+     and jackpots stay longer.
+   - **SteamVR dashboard tab:** a full control panel.
+3. **Touch** a button with the controller tip to press it (you'll feel a buzz).
+   **Grab** a panel by its top bar, or squeeze grip on it, then move it. Let go, or hold
+   still for a second, to put it down. Panels stay where you put them, even next time.
+   *Bring panels here* puts them all back in front of you.
 
-### Keyboard shortcuts (desktop window)
+## Sounds
 
-`Space` pause · `Z` undo · `R` next card is reverse holo · `N` next pack · `A` add a card by hand ·
-`S` choose set · `1`–`5` switch tabs
+Each pull plays a sound by value. Every threshold and sound can be changed in Settings →
+Sound & voice.
 
-## Options (Settings tab)
+- new card: a chime
+- duplicate: a soft double note
+- **hit** ($5+): sparkles
+- **big hit** ($50+): a fanfare
+- **jackpot** ($100+): a **gunshot** by default, or choose an explosion, cash register,
+  air horn, laser or fanfare
 
-Camera choice, resolution, rotate/mirror, exposure, which headset eye to read ·
-scan sensitivity (relaxed / balanced / strict) · automatic or guide-box detection ·
-which sets to look for · how long a card must leave view before rescanning ·
-what to do with duplicates · cards per pack and your pack price · auto-start next pack ·
-every sound on/off with volume, hit thresholds and voice announcements · currency
-(USD, CAD, EUR, GBP, AUD, JPY, MXN, NZD) · VR panel position (in front, follows head,
-left or right hand), size, distance, height, opacity, refresh rate · start with SteamVR ·
-data source and refresh interval · open the dashboard from other devices on your network.
+There's also a tick when a card starts being read, a shuffle for each new pack, and
+chimes for milestones, pause, resume and button presses. Prices can be read aloud too.
 
-## Where your data lives
+## The app
 
-`%APPDATA%\MivimooseScanner\`: `collection.db` (every scan and pack), `settings.json`,
-the card database cache, per-set scan data, and `logs\scanner.log`. Export everything as
-CSV from the Collection tab.
+- **Scan:** live camera with card outlines, last pull, pack slots, session totals.
+- **Binder:** every set as a flip-through 9-pocket binder (missing cards ghosted), or as
+  a grid; set and master-set progress, rarity breakdown, value owned and missing.
+- **Packs:** totals, a chart of every pack's value against its cost, and the pack history.
+- **Collection:** everything you've pulled, sortable and searchable; CSV export.
+- **Settings:** camera, scanning, packs, sound, currency (USD, CAD, EUR, GBP, AUD, JPY,
+  MXN, NZD), VR panels, data.
+
+Keyboard: `Space` pause · `Z` undo · `R` next card is reverse holo · `N` next pack ·
+`A` add by hand · `S` choose set · `1`–`5` pages · `←` `→` turn binder pages.
 
 ## How recognition works
 
-For each camera frame, the scanner:
+Every frame goes through two independent methods:
 
-1. finds the card's outline, snapping it to the straight edges, so fingers over the
-   corners don't matter;
-2. straightens the card and compares it against every card in the set at once, using
-   lighting-independent fingerprints;
-3. confirms the best candidates by checking that their keypoints line up with the card's
-   real scan. The right card typically lines up 80–300 keypoints; any other card about 10.
+1. **Artwork matching.** The card's keypoints are matched against every card in the
+   active sets. A fast approximate lookup shortlists about 15 cards, then exact matching
+   and a fitted homography find each card's exact outline. This works without visible
+   edges (busy tables, sleeves, toploaders, fingers) and finds several cards at once.
+2. **Outline matching.** The card's straight edges are found, the card is straightened,
+   and it's fingerprinted. This catches cards with plain artwork.
 
-A card is recorded only after several frames in a row agree.
+Each sighting gets a confidence between 0 and 1, from logistic models fitted on
+calibration footage (`tests/calibrate.py`). A card is confirmed once its evidence builds
+up over a few frames.
 
-On synthetic test footage (tilted cards, fingers, glare, blur, black-and-white sensor),
-it runs at about 25 frames a second on this PC. One test video had 11 different cards:
-10 were scanned automatically and none were recorded wrongly. The miss was a small,
-blurry card on a very noisy background.
+Reprints that use the same artwork in two loaded sets can't be told apart by any camera.
+They're reported as the copy from the set you're opening.
 
-## Building from source
+Measured on synthetic camera footage: moving cards, fingers, glare, holo shimmer,
+sleeves, toploaders, motion blur, a black-and-white sensor, and cluttered tables.
+
+| Test | Result |
+|---|---|
+| 151, all rarities, 40 cards brought up and taken away | 95% scanned, usually the frame they came fully into view |
+| Demo video (11 cards, duplicate and repeat rules) | all scanned, no false or double scans |
+
+## Building and testing
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File build.ps1     # → dist\MivimooseScanner.exe
+powershell -ExecutionPolicy Bypass -File build.ps1      # -> dist\MivimooseScanner.exe
 ```
 
-Run from source with `.venv\Scripts\python.exe run.py`. Useful flags: `--browser` (open
-in your browser), `--headless`, `--camera file:C:\clip.mp4` (scan a video), `--data-dir`.
+Run from source with `.venv\Scripts\python.exe run.py`. Useful options:
 
-Tests:
+- `--browser` opens the app in your browser
+- `--headless` runs with no window
+- `--camera file:C:\clip.mp4` scans a video
+- `--vr-check` prints the VR check
+- `--data-dir` keeps data in another folder
 
-```powershell
-.venv\Scripts\python.exe -m tests.test_engine <cache dir>              # pack / duplicate / undo rules
-.venv\Scripts\python.exe -m tests.bench_vision <cache dir> sv3pt5 base1 # recognition benchmark
-.venv\Scripts\python.exe -m tests.make_demo_video <cache dir> sv3pt5 demo.mp4
-```
+The tests take a cache folder that has `data\bundle.js` (for example `tests\.cache`):
 
-`<cache dir>` is a folder containing `data\bundle.js` and `data\pack-art.js`
-(`%APPDATA%\MivimooseScanner` works once the app has run).
+| Command | What it checks |
+|---|---|
+| `python -m tests.test_engine <cache>` | pack, duplicate, undo and correction rules |
+| `python -m tests.test_vrgeom` | panel geometry, touch and grab logic |
+| `python -m tests.test_vr_sim` | the VR panels against a simulated SteamVR |
+| `python -m tests.make_demo_video <cache> sv3pt5 demo.mp4` | makes a synthetic test video |
+| `python -m tests.test_app <cache> demo.mp4 [--exe dist\MivimooseScanner.exe]` | the whole app, end to end |
+| `python -m tests.bench_seq <cache> [--sets …] [--mix] [--rare] [--lookalike] [--hard] [--multi]` | scanning benchmark |
+| `python -m tests.bench_vision <cache>` | single-frame detection |
+| `python -m tests.calibrate <cache>` | refits sighting confidence |
+| `python -m tests.screenshots <cache> demo.mp4 shots` | screenshots of every page |
+| `python -m tests.render_vr_panels <cache> demo.mp4 shots` | renders the VR panels |
+
+OpenCV is pinned below 5 because 5.0.0's brute-force matcher corrupts memory.
+
+Your data lives in `%APPDATA%\MivimooseScanner\`: `collection.db`, `settings.json`,
+caches and `logs\scanner.log`.

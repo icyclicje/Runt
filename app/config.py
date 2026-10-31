@@ -10,7 +10,7 @@ from .carddb import DEFAULT_SITE
 
 APP_NAME = 'MivimooseRips Scanner'
 APP_ID = 'mivimoose.scanner'
-VERSION = '1.0.0'
+VERSION = '2.0.0'
 
 
 def data_dir() -> str:
@@ -95,7 +95,12 @@ DEFAULTS = {
     'hud_camera': True,
     'hud_fps': 12,
     'vr_autostart': False,
-    'vr_flip_y': True,             # SteamVR reports overlay clicks bottom-up; turn off if buttons respond upside down
+    'vr_flip_y': True,
+    'vr_touch': True,              # press panel buttons by touching them with a controller
+    'vr_tip_offset': 0.05,         # how far ahead of the controller its 'finger' is (metres)
+    'vr_pack_panel': True,         # a second panel with the current pack's cards
+    'vr_spotlight': True,          # a big pop-up of each card you pull
+    'vr_layout': {},               # where you put each panel in the room: {panel: [x, y, z, yaw, pitch]}             # SteamVR reports overlay clicks bottom-up; turn off if buttons respond upside down
     # data
     'site_url': DEFAULT_SITE,
     'refresh_hours': 12,
@@ -125,7 +130,7 @@ RANGES = {
     'pack_size': (0, 40), 'volume': (0, 1), 'hit_value': (0, 100000), 'big_hit_value': (0, 100000), 'jackpot_value': (0, 1000000),
     'voice_rate': (-5, 5), 'hud_width': (0.15, 1.5), 'hud_distance': (0.3, 3), 'hud_height': (-1, 1),
     'hud_opacity': (0.2, 1), 'hud_fps': (2, 30), 'refresh_hours': (0, 720), 'port': (1024, 65535),
-    'camera_exposure': (-13, 0),
+    'camera_exposure': (-13, 0), 'vr_tip_offset': (0.0, 0.15),
 }
 
 
@@ -175,6 +180,8 @@ class Settings:
                 return max(0.0, float(v))
             if k == 'scope_sets':
                 return [str(x) for x in v][:200]
+            if k == 'vr_layout':
+                return {str(a): [float(x) for x in b][:5] for a, b in dict(v).items() if len(b) >= 5}
             if isinstance(d, bool):
                 return bool(v) if not isinstance(v, str) else v.lower() in ('1', 'true', 'on', 'yes')
             if isinstance(d, int) and not isinstance(d, bool):

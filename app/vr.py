@@ -17,12 +17,14 @@ import time
 
 import numpy as np
 
-from . import hud
+from . import hud, vrgeom
 from .config import APP_ID, APP_NAME
 
 log = logging.getLogger(__name__)
 
 HUD_KEY = APP_ID + '.hud'
+PACK_KEY = APP_ID + '.pack'
+SPOT_KEY = APP_ID + '.spotlight'
 DASH_KEY = APP_ID + '.dashboard'
 _NO_WINDOW = 0x08000000
 
@@ -136,12 +138,44 @@ def _mat34(rot: np.ndarray, pos) -> 'openvr.HmdMatrix34_t':
     return m
 
 
-def _rot_x(deg: float) -> np.ndarray:
-    a = math.radians(deg)
-    return np.array([[1, 0, 0], [0, math.cos(a), -math.sin(a)], [0, math.sin(a), math.cos(a)]])
+class Panel:
+    """One floating panel in the room."""
+
+    def __init__(self, key: str, overlay_key: str, name: str, size, width_m: float, interactive: bool = True):
+        self.key, self.overlay_key, self.name, self.size = key, overlay_key, name, size
+        self.width_m = width_m
+        self.interactive = interactive
+        self.handle = None
+        self.pose = None            # where it is in the room this frame (3x4), for touch
+        self.buttons: list = []
+        self.hover = None
+        self.dirty = True
+        self.visible = False
+        self.placed_key = None
+        self.last_render = 0.0
+        self.pokers: dict = {}      # controller index -> Poker
+
+    @property
+    def height_m(self) -> float:
+        return self.width_m * self.size[1] / self.size[0]
+
+    def button_at(self, u: float, v: float):
+        x, y = u * self.size[0], v * self.size[1]
+        for bid, (x0, y0, x1, y1) in self.buttons:
+            if x0 <= x <= x1 and y0 <= y <= y1:
+                return bid
+        return None
 
 
 class VRManager:
+    """The scanner's panels in your room, and the control panel in the SteamVR dashboard.
+
+    Panels stay where you put them (saved in settings, in SteamVR's room coordinates).
+    Touch a button with a controller to press it; grab a panel by its top bar (or with
+    the grip button) to move it. Everything works from controller positions alone, so
+    no button bindings are needed.
+    """
+
     def __init__(self, engine, settings, bus, images: hud.ImageCache, fmt, icon_path: str):
         self.engine, self.settings, self.bus, self.images, self.fmt = engine, settings, bus, images, fmt
         self.icon_path = icon_path
@@ -150,19 +184,23 @@ class VRManager:
         self.status = 'SteamVR is not running'
         self.ov = None
         self.system = None
-        self.hud_handle = None
         self.dash_handle = None
         self.thumb_handle = None
-        self.hud_buttons: list = []
         self.dash_buttons: list = []
-        self._dirty = True
         self._dash_dirty = True
         self._toast: dict | None = None
-        self._world_pose = None
-        self._placed_mode = None
         self._raw_ok = {}
+        self._grab = None             # (panel, controller index, vrgeom.Grab, with_grip)
+        self._spot_until = 0.0
+        self._spot_scan = None
+        self._recenter = True
         self._stop = threading.Event()
         self._events = bus.subscribe(400)
+        self.panels = {
+            'scanner': Panel('scanner', HUD_KEY, 'Card Scanner', hud.HUD_SIZE, settings['hud_width']),
+            'pack': Panel('pack', PACK_KEY, 'Current Pack', hud.PACK_SIZE, 0.5),
+            'spot': Panel('spot', SPOT_KEY, 'Latest Pull', hud.SPOT_SIZE, 0.3, interactive=False),
+        }
         images.on_ready = self.mark_dirty
         threading.Thread(target=self._run, name='vr', daemon=True).start()
 
@@ -176,7 +214,8 @@ class VRManager:
                 'enabled': self.settings['vr_enabled']}
 
     def mark_dirty(self):
-        self._dirty = True
+        for p in self.panels.values():
+            p.dirty = True
         self._dash_dirty = True
 
     def stop(self):
@@ -216,7 +255,7 @@ class VRManager:
                 else:
                     self.status = f'Connected to SteamVR, but the panel hit an error: {e}'
                     self._stop.wait(0.5)
-            self._stop.wait(1 / 30)
+            self._stop.wait(1 / 45)
         if self.connected:
             self._disconnect('closing')
 
@@ -232,10 +271,12 @@ class VRManager:
         try:
             self.system = openvr.init(openvr.VRApplication_Overlay)
             self.ov = openvr.VROverlay()
-            self.hud_handle = self.ov.createOverlay(HUD_KEY, 'Card Scanner')
-            self.ov.setOverlayInputMethod(self.hud_handle, openvr.VROverlayInputMethod_Mouse)
-            self.ov.setOverlayMouseScale(self.hud_handle, self._vec2(*hud.HUD_SIZE))
-            self.ov.setOverlaySortOrder(self.hud_handle, 10)
+            for p in self.panels.values():
+                p.handle = self.ov.createOverlay(p.overlay_key, p.name)
+                self.ov.setOverlayInputMethod(p.handle, openvr.VROverlayInputMethod_Mouse)
+                self.ov.setOverlayMouseScale(p.handle, self._vec2(*p.size))
+                self.ov.setOverlaySortOrder(p.handle, 20 if p.key == 'spot' else 10)
+                p.visible, p.placed_key, p.dirty, p.pokers = False, None, True, {}
             self.dash_handle, self.thumb_handle = self.ov.createDashboardOverlay(DASH_KEY, APP_NAME)
             self.ov.setOverlayWidthInMeters(self.dash_handle, 2.4)
             self.ov.setOverlayInputMethod(self.dash_handle, openvr.VROverlayInputMethod_Mouse)
@@ -248,11 +289,11 @@ class VRManager:
             threading.Thread(target=self._probe_camera, name='vr-camera-probe', daemon=True).start()
             self.connected = True
             self.status = 'Connected to SteamVR'
-            self._world_pose = None
-            self._placed_mode = None
+            self._recenter = not self.settings['vr_layout']
+            self._grab = None
             self.mark_dirty()
             self._register_manifest()
-            log.info('connected to SteamVR (headset camera: %s)', self.has_camera)
+            log.info('connected to SteamVR')
             self.bus.emit('vr', **self.info())
             self._notify_engine()
         except Exception as e:
@@ -322,12 +363,31 @@ class VRManager:
 
     # ---------------------------------------------------------------- per-frame work
 
+    def _poses(self):
+        """(head 3x4 or None, [(controller index, 3x4)]) in room coordinates."""
+        import openvr
+        poses = (openvr.TrackedDevicePose_t * openvr.k_unMaxTrackedDeviceCount)()
+        self.system.getDeviceToAbsoluteTrackingPose(openvr.TrackingUniverseStanding, 0, poses)
+
+        def mat(i):
+            p = poses[i]
+            if not p.bPoseIsValid:
+                return None
+            return np.array([[p.mDeviceToAbsoluteTracking.m[r][c] for c in range(4)] for r in range(3)])
+        head = mat(openvr.k_unTrackedDeviceIndex_Hmd)
+        ctrls = []
+        for role in (openvr.TrackedControllerRole_LeftHand, openvr.TrackedControllerRole_RightHand):
+            i = self.system.getTrackedDeviceIndexForControllerRole(role)
+            if i < openvr.k_unMaxTrackedDeviceCount:
+                m = mat(i)
+                if m is not None:
+                    ctrls.append((i, m))
+        return head, ctrls
+
     def _tick(self):
         import openvr
-        # app events
         while not self._events.empty():
             self._on_app_event(self._events.get_nowait())
-        # SteamVR events
         ev = openvr.VREvent_t()
         while self.system.pollNextEvent(ev):
             if ev.eventType in (openvr.VREvent_Quit, openvr.VREvent_ProcessQuit):
@@ -337,8 +397,10 @@ class VRManager:
                     pass
                 self._disconnect('SteamVR closed')
                 return
-        for handle, buttons, size in ((self.hud_handle, self.hud_buttons, hud.HUD_SIZE),
-                                      (self.dash_handle, self.dash_buttons, hud.DASH_SIZE)):
+        # laser-pointer clicks, when SteamVR provides them (always in the dashboard)
+        targets = [(p.handle, p.buttons, p.size) for p in self.panels.values()]
+        targets.append((self.dash_handle, self.dash_buttons, hud.DASH_SIZE))
+        for handle, buttons, size in targets:
             ok, e = self.ov.pollNextOverlayEvent(handle, openvr.VREvent_t())
             while ok:
                 if e.eventType == openvr.VREvent_MouseButtonDown:
@@ -348,23 +410,220 @@ class VRManager:
                     self._click(buttons, x, y)
                 ok, e = self.ov.pollNextOverlayEvent(handle, openvr.VREvent_t())
 
-        self._place()
         now = time.time()
+        head, ctrls = self._poses()
+        self._place(head, ctrls)
+        if self.settings['vr_touch'] and not self.ov.isDashboardVisible():
+            self._touch(head, ctrls, now)
+
         lv = self.engine.live()
         sig = (lv.get('pendingName'), round(lv.get('progress', 0), 1), lv.get('hint'), len(lv.get('lockedNames', [])))
         if sig != getattr(self, '_live_sig', None):          # reading progress or a tip changed
             self._live_sig = sig
-            self._dirty = True
-        if self.settings['hud_camera'] and self.engine.camera is not None:
-            if now - getattr(self, '_last_cam', 0) > 1 / max(1, self.settings['hud_fps']):
-                self._dirty = True
-        if self._dirty:
-            self._last_cam = now
-            self._dirty = False
-            self._render_hud()
-        if self._dash_dirty and self.ov.isDashboardVisible():
-            self._dash_dirty = False
-            self._render_dash()
+            self.panels['scanner'].dirty = True
+        sc = self.panels['scanner']
+        if self.settings['hud_camera'] and self.engine.camera is not None \
+                and now - sc.last_render > 1 / max(1, self.settings['hud_fps']):
+            sc.dirty = True
+        if self._spot_scan is not None and now > self._spot_until:
+            self._spot_scan = None
+            self._hide(self.panels['spot'])
+        self._render(now)
+
+    # ---------------------------------------------------------------- placement
+
+    def _layout(self, key):
+        v = (self.settings['vr_layout'] or {}).get(key)
+        return (np.array(v[:3]), v[3], v[4]) if v and len(v) >= 5 else None
+
+    def _save_layout(self, key, pos, yaw, pitch):
+        lay = dict(self.settings['vr_layout'] or {})
+        lay[key] = [round(float(x), 4) for x in pos] + [round(float(yaw), 2), round(float(pitch), 2)]
+        self.settings.update({'vr_layout': lay})
+
+    def _show(self, p: Panel):
+        if not p.visible:
+            self.ov.showOverlay(p.handle)
+            p.visible = True
+            p.dirty = True
+
+    def _hide(self, p: Panel):
+        if p.visible:
+            self.ov.hideOverlay(p.handle)
+            p.visible = False
+        p.pose = None
+
+    def _set_world(self, p: Panel, pos, yaw, pitch):
+        import openvr
+        m = vrgeom.pose_matrix(pos, yaw, pitch)
+        self.ov.setOverlayTransformAbsolute(p.handle, openvr.TrackingUniverseStanding, _mat34(m[:, :3], m[:, 3]))
+        p.pose = m
+
+    def _place(self, head, ctrls):
+        import openvr
+        s = self.settings
+        missing = [k for k in ('scanner', 'pack') if self._layout(k) is None]
+        if (self._recenter or missing) and head is not None:
+            # in front of you: the scanner panel ahead, the pack panel to the right and lower (like on a table).
+            # 'Bring panels here' moves them all; otherwise only panels with no saved spot yet are placed.
+            lay = dict(s['vr_layout'] or {})
+            for key, args in (('scanner', (s['hud_distance'], s['hud_height'])),
+                              ('pack', (s['hud_distance'] + 0.1, s['hud_height'] - 0.3, 0.0, 38))):
+                if self._recenter or key in missing:
+                    pos, yaw, pitch = vrgeom.in_front(head, *args)
+                    lay[key] = [round(float(x), 4) for x in pos] + [round(yaw, 2), round(pitch, 2)]
+            self._recenter = False
+            s.update({'vr_layout': lay})
+            for p in self.panels.values():
+                p.placed_key = None
+        grabbing = self._grab[0] if self._grab else None
+
+        sc = self.panels['scanner']
+        mode = s['hud_mode']
+        sc.width_m = s['hud_width'] if mode in ('world', 'head') else min(s['hud_width'], 0.28)
+        head_rel = vrgeom.pose_matrix((0, s['hud_height'], -s['hud_distance']), 0, -12)
+        hand_rel = vrgeom.pose_matrix((0, 0.04, 0.09), 0, -55)    # above the controller, tilted like a watch
+        key = (mode, sc.width_m, s['hud_opacity'], s['hud_distance'], s['hud_height'], str(self._layout('scanner')))
+        if sc is not grabbing and sc.placed_key != key:
+            if mode == 'world':
+                lay = self._layout('scanner')
+                if lay is not None:
+                    self._set_world(sc, *lay)
+            elif mode == 'head':
+                self.ov.setOverlayTransformTrackedDeviceRelative(sc.handle, openvr.k_unTrackedDeviceIndex_Hmd,
+                                                                 _mat34(head_rel[:, :3], head_rel[:, 3]))
+            else:
+                role = openvr.TrackedControllerRole_LeftHand if mode == 'left' else openvr.TrackedControllerRole_RightHand
+                idx = self.system.getTrackedDeviceIndexForControllerRole(role)
+                if idx >= openvr.k_unMaxTrackedDeviceCount:
+                    key = None                                  # that controller isn't on yet: try again
+                else:
+                    self.ov.setOverlayTransformTrackedDeviceRelative(sc.handle, idx, _mat34(hand_rel[:, :3], hand_rel[:, 3]))
+            self.ov.setOverlayWidthInMeters(sc.handle, sc.width_m)
+            self.ov.setOverlayAlpha(sc.handle, s['hud_opacity'])
+            sc.placed_key = key
+        # where a head- or hand-attached panel is right now, for touch
+        if mode == 'head':
+            sc.pose = vrgeom.compose(head, head_rel) if head is not None else None
+        elif mode in ('left', 'right'):
+            role = openvr.TrackedControllerRole_LeftHand if mode == 'left' else openvr.TrackedControllerRole_RightHand
+            m = dict(ctrls).get(self.system.getTrackedDeviceIndexForControllerRole(role))
+            sc.pose = vrgeom.compose(m, hand_rel) if m is not None else None
+        self._show(sc)
+
+        pk = self.panels['pack']
+        if s['vr_pack_panel']:
+            lay = self._layout('pack')
+            pkey = str(lay)
+            if lay is not None and pk.placed_key != pkey and pk is not grabbing:
+                self.ov.setOverlayWidthInMeters(pk.handle, pk.width_m)
+                self.ov.setOverlayAlpha(pk.handle, s['hud_opacity'])
+                self._set_world(pk, *lay)
+                pk.placed_key = pkey
+            if pk.pose is not None:
+                self._show(pk)
+        else:
+            self._hide(pk)
+            pk.placed_key = None
+
+    def _place_spotlight(self, head):
+        """Above the scanner panel when it's in the room, else in front of your face."""
+        sp, sc = self.panels['spot'], self.panels['scanner']
+        if sc.pose is not None and self.settings['hud_mode'] == 'world':
+            pos = sc.pose[:, 3] + sc.pose[:, 1] * (sc.height_m / 2 + sp.height_m / 2 + 0.04)
+            yaw, pitch = vrgeom.facing(pos, head[:, 3]) if head is not None else (0.0, 0.0)
+        elif head is not None:
+            pos, yaw, pitch = vrgeom.in_front(head, 0.65, 0.05)
+        else:
+            return
+        self.ov.setOverlayWidthInMeters(sp.handle, sp.width_m)
+        self._set_world(sp, pos, yaw, pitch)
+        self._show(sp)
+
+    # ---------------------------------------------------------------- touch & grab
+
+    def _grip_down(self, idx) -> bool:
+        """The grip button, if SteamVR lets an overlay read it (otherwise grabbing uses the top bar)."""
+        import openvr
+        try:
+            ok, st = self.system.getControllerState(idx)
+            return bool(ok) and bool(st.ulButtonPressed & (1 << openvr.k_EButton_Grip))
+        except Exception:
+            return False
+
+    def _buzz(self, idx, us=1200):
+        try:
+            self.system.triggerHapticPulse(idx, 0, us)
+        except Exception:
+            pass
+
+    def _touch(self, head, ctrls, now):
+        s = self.settings
+        if self._grab:
+            p, idx, grab, with_grip = self._grab
+            m = dict(ctrls).get(idx)
+            if m is None or head is None:
+                self._grab = None
+                return
+            pos, yaw, pitch = grab.follow(m[:, 3], head[:, 3], now)
+            self._set_world(p, pos, yaw, pitch)
+            released = (not self._grip_down(idx)) if with_grip else grab.settled(now, 1.0)
+            if released:
+                if p.key == 'scanner' and s['hud_mode'] != 'world':
+                    s.update({'hud_mode': 'world'})
+                self._save_layout(p.key, pos, yaw, pitch)
+                p.placed_key = None
+                p.hover = None
+                p.dirty = True
+                self._grab = None
+                self._buzz(idx, 2500)
+                if s['snd_ui']:
+                    self.engine.sounds.play('click')
+            return
+        hovers = {}
+        for idx, m in ctrls:
+            tip = vrgeom.tip_of(m, s['vr_tip_offset'])
+            best, best_hit = None, None
+            for p in self.panels.values():
+                if not (p.visible and p.interactive and p.pose is not None):
+                    continue
+                hit = vrgeom.point_on_panel(p.pose, p.width_m, p.height_m, tip)
+                if hit.inside and -0.12 < hit.depth < 0.25 and (best_hit is None or abs(hit.depth) < abs(best_hit.depth)):
+                    best, best_hit = p, hit
+            for p in self.panels.values():                       # forget panels this hand isn't near
+                if p is not best and idx in p.pokers:
+                    p.pokers[idx].update(None)
+            if best is None:
+                continue
+            bid = best.button_at(best_hit.u, best_hit.v)
+            if vrgeom.Poker.hovering(best_hit) and bid:
+                hovers[best.key] = bid
+            if self._grip_down(idx) and abs(best_hit.depth) < 0.1:   # grip anywhere on a panel picks it up
+                self._start_grab(best, idx, m, with_grip=True)
+                return
+            ev = best.pokers.setdefault(idx, vrgeom.Poker()).update(best_hit)
+            if ev == 'press' and bid:
+                self._buzz(idx)
+                if bid == 'handle':
+                    self._start_grab(best, idx, m, with_grip=False)
+                    return
+                self._action(bid)
+        for p in self.panels.values():
+            h = hovers.get(p.key)
+            if h != p.hover:
+                p.hover = h
+                p.dirty = True
+
+    def _start_grab(self, p: Panel, idx, m, with_grip: bool):
+        if p.pose is None:
+            return
+        self._grab = (p, idx, vrgeom.Grab(p.pose[:, 3], m[:, 3]), with_grip)
+        p.hover = 'handle'
+        p.dirty = True
+        if self.settings['snd_ui']:
+            self.engine.sounds.play('click')
+
+    # ---------------------------------------------------------------- app events & actions
 
     def _on_app_event(self, ev: dict):
         t = ev['type']
@@ -372,7 +631,7 @@ class VRManager:
         msg = None
         if t == 'pack_done':
             p = ev['pack']
-            prof = '' if p.get('profit') is None else f"  ({'+' if p['profit'] >= 0 else '−'}{f(abs(p['profit']))})"
+            prof = '' if p.get('profit') is None else f"  ({'+' if p['profit'] >= 0 else '-'}{f(abs(p['profit']))})"
             msg = (f"Pack {p['number']} done: {f(p['value'])}{prof}", 'good')
         elif t == 'milestone':
             msg = (f"{ev['name']}: {'master set complete!' if ev['kind'] == 'master' else str(ev['pct']) + '% of the set!'}", 'hit')
@@ -380,28 +639,39 @@ class VRManager:
             msg = (f"{ev['card']['name']} is already in this pack", 'info')
         elif t == 'undo':
             msg = ('Removed the last scan', 'info')
-        elif t == 'scan':
+        elif t == 'scan' and self.settings['vr_spotlight'] and self.connected:
             sc = ev['scan']
-            if sc.get('price', 0) >= self.settings['big_hit_value']:
-                msg = (f"BIG HIT! {sc['card']['name']}", 'hit')
+            price = sc.get('price') or 0
+            self._spot_scan = sc
+            hold = 7.0 if price >= self.settings['jackpot_value'] else 5.0 if price >= self.settings['big_hit_value'] else 3.5
+            self._spot_until = time.time() + hold
+            c = sc.get('card') or {}
+            self.images.get(c.get('imgLarge'))
+            self.images.get(c.get('img'))
+            head, _ = self._poses()
+            self._place_spotlight(head)
         elif t == 'prep' and ev.get('running') is not False and ev.get('total'):
             msg = (f"Downloading {ev.get('name', 'set')}… {ev.get('done', 0)}/{ev['total']}", 'info')
         elif t == 'toast':
             msg = (ev['message'], ev.get('level', 'info'))
+        elif t == 'vr_recenter':
+            self._recenter = True
         if msg:
             self._toast = {'message': msg[0], 'level': msg[1], 'ts': time.time()}
-        if t == 'settings' and {'hud_mode', 'hud_width', 'hud_distance', 'hud_height', 'hud_opacity'} & ev['changed'].keys():
-            self._placed_mode = None
-            if 'hud_mode' in ev['changed'] or 'hud_distance' in ev['changed'] or 'hud_height' in ev['changed']:
-                self._world_pose = None
-        if t == 'settings' and 'vr_autostart' in ev['changed']:
-            self._register_manifest()
+        if t == 'settings':
+            ch = ev.get('changed', {})
+            if {'hud_mode', 'hud_width', 'hud_distance', 'hud_height', 'hud_opacity', 'vr_layout', 'vr_pack_panel'} & ch.keys():
+                for p in self.panels.values():
+                    p.placed_key = None
+            if 'vr_autostart' in ch:
+                self._register_manifest()
         self.mark_dirty()
 
     def _click(self, buttons, x, y):
         for bid, (x0, y0, x1, y1) in buttons:
             if x0 <= x <= x1 and y0 <= y <= y1:
-                self._action(bid)
+                if bid != 'handle':
+                    self._action(bid)
                 return
 
     def _action(self, bid: str):
@@ -419,66 +689,18 @@ class VRManager:
         elif bid == 'hud_mode':
             modes = ['world', 'head', 'left', 'right']
             s.update({'hud_mode': modes[(modes.index(s['hud_mode']) + 1) % len(modes)]})
-            self._placed_mode = None
-            self._world_pose = None
         elif bid == 'recenter':
-            self._world_pose = None
-            self._placed_mode = None
+            self._recenter = True
         elif bid == 'hud_camera':
             s.update({'hud_camera': not s['hud_camera']})
         elif bid == 'voice':
             order = ['off', 'price', 'name_price', 'hits']
             s.update({'voice': order[(order.index(s['voice']) + 1) % len(order)]})
+        if bid in ('hud_mode', 'recenter'):
+            for p in self.panels.values():
+                p.placed_key = None
         self.bus.emit('settings', changed={})
         self.mark_dirty()
-
-    # ---------------------------------------------------------------- placement
-
-    def _place(self):
-        import openvr
-        s = self.settings
-        mode = s['hud_mode']
-        key = (mode, s['hud_width'], s['hud_opacity'], s['hud_distance'], s['hud_height'])
-        if mode != 'world' and self._placed_mode == key:
-            return
-        if mode == 'world' and self._placed_mode == key and self._world_pose is not None:
-            return
-        h = self.hud_handle
-        width = s['hud_width'] if mode in ('world', 'head') else min(s['hud_width'], 0.28)
-        self.ov.setOverlayWidthInMeters(h, width)
-        self.ov.setOverlayAlpha(h, s['hud_opacity'])
-        if mode == 'head':
-            self.ov.setOverlayTransformTrackedDeviceRelative(
-                h, openvr.k_unTrackedDeviceIndex_Hmd, _mat34(_rot_x(-12), (0, s['hud_height'], -s['hud_distance'])))
-        elif mode in ('left', 'right'):
-            role = openvr.TrackedControllerRole_LeftHand if mode == 'left' else openvr.TrackedControllerRole_RightHand
-            idx = self.system.getTrackedDeviceIndexForControllerRole(role)
-            if idx >= openvr.k_unMaxTrackedDeviceCount:
-                return                                  # controller not on yet; try again next tick
-            # lies just above the controller, tilted back toward your face like a wrist display
-            self.ov.setOverlayTransformTrackedDeviceRelative(h, idx, _mat34(_rot_x(-55), (0, 0.04, 0.09)))
-        else:
-            # pyopenvr only fills an array it's given (passing None returns None)
-            poses = (openvr.TrackedDevicePose_t * openvr.k_unMaxTrackedDeviceCount)()
-            self.system.getDeviceToAbsoluteTrackingPose(openvr.TrackingUniverseStanding, 0, poses)
-            hp = poses[openvr.k_unTrackedDeviceIndex_Hmd]
-            if not hp.bPoseIsValid:
-                return
-            m = np.array([[hp.mDeviceToAbsoluteTracking.m[r][c] for c in range(4)] for r in range(3)])
-            pos = m[:, 3]
-            fwd = -m[:, 2]
-            fwd[1] = 0
-            n = np.linalg.norm(fwd)
-            fwd = fwd / n if n > 1e-3 else np.array([0, 0, -1.0])
-            z = -fwd                                    # panel faces you
-            y = np.array([0, 1.0, 0])
-            x = np.cross(y, z)
-            rot = np.stack([x, y, z], 1) @ _rot_x(-15)
-            p = pos + fwd * s['hud_distance'] + np.array([0, s['hud_height'], 0])
-            self.ov.setOverlayTransformAbsolute(h, openvr.TrackingUniverseStanding, _mat34(rot, p))
-            self._world_pose = p
-        self.ov.showOverlay(h)
-        self._placed_mode = key
 
     # ---------------------------------------------------------------- drawing
 
@@ -500,16 +722,34 @@ class VRManager:
         img.save(path, compress_level=1)
         self.ov.setOverlayFromFile(handle, path)
 
-    def _render_hud(self):
-        state = self.engine.state()
-        cam = None
-        if self.settings['hud_camera'] and self.engine.camera is not None:
-            seq, frame = self.engine.camera.get(-1, timeout=0)
-            if frame is not None:
-                cam = self.engine.annotate(frame, 480)
-        img, self.hud_buttons = hud.hud(state, self.fmt, self.images, cam, self._toast, self.settings['hud_camera'])
-        self._upload(self.hud_handle, img)
+    def _render(self, now):
+        state = None
+        for p in self.panels.values():
+            if not (p.dirty and p.visible) or now - p.last_render < 1 / 30:
+                continue
+            if p.key == 'spot' and self._spot_scan is None:
+                continue
+            p.dirty = False
+            p.last_render = now
+            if state is None:
+                state = self.engine.state()
+            if p.key == 'scanner':
+                cam = None
+                if self.settings['hud_camera'] and self.engine.camera is not None:
+                    seq, frame = self.engine.camera.get(-1, timeout=0)
+                    if frame is not None:
+                        cam = self.engine.annotate(frame, 480)
+                img, p.buttons = hud.hud(state, self.fmt, self.images, cam, self._toast, self.settings['hud_camera'], p.hover)
+            elif p.key == 'pack':
+                img, p.buttons = hud.pack_panel(state, self.fmt, self.images, p.hover)
+            else:
+                img = hud.spotlight(self._spot_scan, self.fmt, self.images, self.settings['jackpot_value'],
+                                    self.settings['big_hit_value'])
+                p.buttons = []
+            self._upload(p.handle, img)
+        if self._dash_dirty and self.ov.isDashboardVisible():
+            self._dash_dirty = False
+            img, self.dash_buttons = hud.dashboard(state or self.engine.state(), self.fmt, self.images, self.settings)
+            self._upload(self.dash_handle, img)
 
-    def _render_dash(self):
-        img, self.dash_buttons = hud.dashboard(self.engine.state(), self.fmt, self.images, self.settings)
-        self._upload(self.dash_handle, img)
+

@@ -206,6 +206,7 @@ class Engine:
         ready = [ix for ix in (self.refs.load(i) for i in ids if i not in missing) if ix is not None]
         d = Detector()
         d.load(ready)
+        d.preferred_sets = ids                  # a reprint is reported as the copy from the set being opened
         with self.lock:
             self.detector, self.matcher_sets = d, [ix.set_id for ix in ready]
         self.tracker.reset(keep_lock=True)

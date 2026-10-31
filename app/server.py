@@ -248,6 +248,9 @@ class Handler(BaseHTTPRequestHandler):
             e.bus.emit('state_changed')
         elif act == 'reload_data':
             e.reload_data()
+        elif act == 'vr_recenter':
+            self.app.settings.update({'vr_layout': {}})
+            e.bus.emit('vr_recenter')
         elif act == 'restart_camera':
             e.restart_camera()
         elif act == 'test_sound':

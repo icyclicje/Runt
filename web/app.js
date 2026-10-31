@@ -636,7 +636,12 @@ const SETTINGS = [
   ] },
   { id: 'vr', title: 'VR headset', items: [
     { key: 'vr_enabled', label: 'Show the scanner panel in VR', type: 'bool' },
-    { key: 'hud_mode', label: 'Panel position', labels: { world: 'Floating in front of you', head: 'Follows your head', left: 'Left hand', right: 'Right hand' } },
+    { key: 'hud_mode', label: 'Scanner panel', labels: { world: 'In the room (stays where you put it)', head: 'Follows your head', left: 'Left hand', right: 'Right hand' } },
+    { key: 'vr_pack_panel', label: 'Pack panel', type: 'bool', help: 'A second panel with the current pack’s cards, big enough to read on the table.' },
+    { key: 'vr_spotlight', label: 'Spotlight each pull', type: 'bool', help: 'The card you just pulled pops up large above the scanner panel.' },
+    { key: 'vr_touch', label: 'Touch panels to press buttons', type: 'bool', help: 'Tap a button with your controller. Hold a panel’s top bar (or squeeze grip) to move it; let go, or hold still for a second, to put it down.' },
+    { key: 'vr_tip_offset', label: 'Controller “finger” length', type: 'range', step: 0.01, unit: ' m', help: 'How far ahead of the controller touches count from.' },
+    { action: 'vr_recenter', label: 'Bring panels in front of me', help: 'Puts every panel back in front of you (next time the headset is on).' },
     { key: 'hud_width', label: 'Panel size', type: 'range', step: 0.01, unit: ' m' },
     { key: 'hud_distance', label: 'Distance', type: 'range', step: 0.05, unit: ' m' },
     { key: 'hud_height', label: 'Height (from eye level)', type: 'range', step: 0.01, unit: ' m' },

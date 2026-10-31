@@ -52,16 +52,17 @@ def _bucket(kps, shape, grid=(10, 8), keep=400):
         return kps
     h, w = shape[:2]
     per = max(2, int(keep * 1.6 / (grid[0] * grid[1])))
-    arr = np.array([(k.pt[0], k.pt[1], k.response) for k in kps], np.float32)
-    cx = np.minimum(grid[0] - 1, (arr[:, 0] * grid[0] / w).astype(np.int32))
-    cy = np.minimum(grid[1] - 1, (arr[:, 1] * grid[1] / h).astype(np.int32))
+    pts = cv2.KeyPoint_convert(kps)                         # in C++, no per-keypoint Python
+    resp = np.fromiter((k.response for k in kps), np.float32, len(kps))
+    cx = np.minimum(grid[0] - 1, (pts[:, 0] * grid[0] / w).astype(np.int32))
+    cy = np.minimum(grid[1] - 1, (pts[:, 1] * grid[1] / h).astype(np.int32))
     cell = cy * grid[0] + cx
-    order = np.lexsort((-arr[:, 2], cell))                  # by cell, strongest first within each
+    order = np.lexsort((-resp, cell))                       # by cell, strongest first within each
     sc = cell[order]
     first = np.searchsorted(sc, sc, side='left')            # index of each cell's first entry
     rank = np.arange(len(sc)) - first
     keep_idx = order[rank < per]
-    keep_idx = keep_idx[np.argsort(-arr[keep_idx, 2])][:keep]
+    keep_idx = keep_idx[np.argsort(-resp[keep_idx])][:keep]
     return [kps[i] for i in keep_idx]
 
 
@@ -74,7 +75,7 @@ def ref_features(ref: np.ndarray, max_kp: int = 360):
     kps, des = orb.compute(eq, kps)
     if des is None or not kps:
         return np.zeros((0, 2), np.float32), np.zeros((0, 32), np.uint8)
-    return np.float32([k.pt for k in kps]), des
+    return cv2.KeyPoint_convert(kps), des
 
 
 def frame_features(gray: np.ndarray, max_side: int = 960, budget: int = 2500):
@@ -89,7 +90,7 @@ def frame_features(gray: np.ndarray, max_side: int = 960, budget: int = 2500):
     kps, des = orb.compute(eq, kps)
     if des is None or not kps:
         return np.zeros((0, 2), np.float32), None, s
-    return np.float32([k.pt for k in kps]) / s, des, s
+    return cv2.KeyPoint_convert(kps) / s, des, s
 
 
 _REF_CORNERS = np.float32([[0, 0], [REF_W - 1, 0], [REF_W - 1, REF_H - 1], [0, REF_H - 1]]).reshape(-1, 1, 2)
@@ -144,7 +145,11 @@ class FeatureIndex:
         self.des = np.concatenate(des) if des else np.zeros((0, 32), np.uint8)
         self._lsh = None
         if len(self.des):
-            m = cv2.FlannBasedMatcher(dict(algorithm=6, table_number=6, key_size=16, multi_probe_level=0),
+            # Bigger hash keys mean smaller buckets: needed to stay fast with many sets loaded
+            # (measured: 7 sets, ~490k keypoints: key 16 -> 35 ms, key 22 -> 13 ms, same shortlist hit rate).
+            n = len(self.des)
+            tables, key = (6, 16) if n < 150_000 else (6, 18) if n < 300_000 else (8, 22)
+            m = cv2.FlannBasedMatcher(dict(algorithm=6, table_number=tables, key_size=key, multi_probe_level=0),
                                       dict(checks=16))
             m.add([self.des])
             m.train()
@@ -167,14 +172,15 @@ class FeatureIndex:
         return [int(c) for c in top if votes[c] >= 3]
 
     def detect(self, gray: np.ndarray, max_cards: int = 6, min_inliers: int = 10, feats=None,
-               extra: list[str] = ()) -> list[FeatHit]:
-        """Cards visible in the frame. extra: card keys to consider in any case (e.g. from the outline matcher)."""
+               extra: list[str] = (), only_extra: bool = False) -> list[FeatHit]:
+        """Cards visible in the frame. extra: card keys to consider in any case (e.g. from the outline
+        matcher); only_extra: consider just those (a quick second look)."""
         if self._lsh is None:
             return []
         qpts, qdes, s = feats if feats is not None else frame_features(gray)
         if qdes is None or len(qdes) < 8:
             return []
-        cand = self.shortlist(qdes)
+        cand = [] if only_extra else self.shortlist(qdes)
         for k in extra:
             i = self.index_of.get(k)
             if i is not None and i not in cand:
@@ -208,8 +214,9 @@ class FeatureIndex:
         used = np.zeros(len(qpts), bool)
         hits: list[FeatHit] = []
         # homographies are fitted in the downscaled frame's pixels (thresholds there are stable)
+        floor = max(8, min_inliers * 0.7)             # absolute: another card in view may be far behind the leader
         for c in order[: max_cards * 3]:
-            if votes[c] < max(8, min_inliers * 0.7) or len(hits) >= max_cards:
+            if votes[c] < floor or len(hits) >= max_cards:
                 break
             sel = (cards == c) & ~used[qi]
             if sel.sum() < 8:
