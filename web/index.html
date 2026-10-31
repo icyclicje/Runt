@@ -1,0 +1,150 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>MivimooseRips Scanner</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Bungee&family=Rubik:wght@400;500;700;800&display=swap" rel="stylesheet">
+  <link rel="icon" href="icon.svg">
+  <link rel="stylesheet" href="app.css">
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand"><img src="icon.svg" alt=""><span>Mivimoose<b>Rips</b> <small>Scanner</small></span></div>
+    <nav class="tabs" id="tabs">
+      <button data-tab="scan" class="active">Scan</button>
+      <button data-tab="progress">Set Progress</button>
+      <button data-tab="packs">Packs</button>
+      <button data-tab="collection">Collection</button>
+      <button data-tab="settings">Settings</button>
+    </nav>
+    <div class="chips" id="status-chips"></div>
+  </header>
+
+  <main>
+    <!-- ======================= SCAN ======================= -->
+    <section class="view active" id="view-scan">
+      <div class="scan-grid">
+        <div class="col-main">
+          <div class="panel camera-panel">
+            <div class="camera-wrap" id="camera-wrap">
+              <img id="camera" alt="Camera view">
+              <div class="camera-empty" id="camera-empty"></div>
+              <div class="camera-status" id="camera-status"></div>
+              <div class="confirm-ring" id="confirm-ring" hidden></div>
+            </div>
+            <div class="controls">
+              <button class="btn btn-lg" id="btn-pause" title="Space">Pause</button>
+              <button class="btn btn-lg" id="btn-undo" title="Z">Undo last</button>
+              <button class="btn btn-lg toggle" id="btn-reverse" title="R">Next card: reverse holo</button>
+              <button class="btn btn-lg btn-primary" id="btn-next" title="N">Next pack</button>
+              <button class="btn btn-lg" id="btn-add" title="A">Add by hand</button>
+            </div>
+          </div>
+          <div class="panel">
+            <div class="panel-head"><h2>Recent scans</h2><span class="muted small" id="perf"></span></div>
+            <div class="recent" id="recent"></div>
+          </div>
+        </div>
+
+        <div class="col-side">
+          <div class="panel set-card" id="set-card"></div>
+          <div class="panel last-card" id="last-card"></div>
+          <div class="panel" id="pack-card"></div>
+          <div class="panel" id="session-card"></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ======================= SET PROGRESS ======================= -->
+    <section class="view" id="view-progress">
+      <div class="progress-grid">
+        <aside class="panel set-picker">
+          <input type="search" id="prog-search" placeholder="Search sets…">
+          <div class="row gap">
+            <select id="prog-lang"></select>
+            <label class="check"><input type="checkbox" id="prog-started"> Started only</label>
+          </div>
+          <ul class="set-list" id="prog-sets"></ul>
+        </aside>
+        <div class="prog-main" id="prog-main"></div>
+      </div>
+    </section>
+
+    <!-- ======================= PACKS ======================= -->
+    <section class="view" id="view-packs">
+      <div class="panel">
+        <div class="panel-head">
+          <h2>Pack tracker</h2>
+          <select id="packs-set"></select>
+        </div>
+        <div class="stats" id="packs-totals"></div>
+      </div>
+      <div class="pack-list" id="pack-list"></div>
+      <button class="btn more" id="packs-more" hidden>Show more</button>
+    </section>
+
+    <!-- ======================= COLLECTION ======================= -->
+    <section class="view" id="view-collection">
+      <div class="panel">
+        <div class="panel-head">
+          <h2>Your collection</h2>
+          <div class="row gap">
+            <input type="search" id="col-search" placeholder="Filter cards…">
+            <select id="col-sort">
+              <option value="value">Most valuable</option>
+              <option value="recent">Recently scanned</option>
+              <option value="name">Name</option>
+              <option value="set">Set</option>
+            </select>
+            <a class="btn" href="/api/export.csv" id="col-export">Export CSV</a>
+          </div>
+        </div>
+        <div class="stats" id="col-totals"></div>
+      </div>
+      <div class="card-grid" id="col-grid"></div>
+    </section>
+
+    <!-- ======================= SETTINGS ======================= -->
+    <section class="view" id="view-settings">
+      <div class="settings" id="settings"></div>
+    </section>
+  </main>
+
+  <!-- set chooser -->
+  <dialog id="set-dialog" class="dialog wide">
+    <div class="dialog-head">
+      <h2>Which set are you opening?</h2>
+      <button class="btn btn-ghost" data-close>✕</button>
+    </div>
+    <div class="row gap">
+      <input type="search" id="set-search" placeholder="Search sets (name, series, year)…" autofocus>
+      <select id="set-lang"></select>
+    </div>
+    <div class="set-choices" id="set-choices"></div>
+  </dialog>
+
+  <!-- manual add / correct -->
+  <dialog id="add-dialog" class="dialog">
+    <div class="dialog-head">
+      <h2 id="add-title">Add a card by hand</h2>
+      <button class="btn btn-ghost" data-close>✕</button>
+    </div>
+    <div class="row gap">
+      <input type="search" id="add-search" placeholder="Card name or number…">
+      <label class="check"><input type="checkbox" id="add-anyset"> All sets</label>
+    </div>
+    <div class="add-results" id="add-results"></div>
+  </dialog>
+
+  <!-- card detail -->
+  <dialog id="card-dialog" class="dialog"></dialog>
+
+  <div class="toasts" id="toasts"></div>
+  <div class="celebrate" id="celebrate" hidden></div>
+
+  <script src="app.js"></script>
+</body>
+</html>

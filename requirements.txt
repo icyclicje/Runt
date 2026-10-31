@@ -1,0 +1,8 @@
+numpy>=2.0
+opencv-python-headless>=4.10
+pillow>=10.0
+openvr>=2.0
+pywebview>=5.0
+pygrabber>=0.2
+comtypes>=1.4
+pyinstaller>=6.10
