@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- A tilted holo card with a scan line, on the 108dp adaptive-icon grid (safe zone 66dp). -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:aapt="http://schemas.android.com/aapt"
+    android:width="108dp" android:height="108dp"
+    android:viewportWidth="108" android:viewportHeight="108">
+    <group android:pivotX="54" android:pivotY="54" android:rotation="-8">
+        <path android:pathData="M40,30 h28 a4,4 0 0 1 4,4 v40 a4,4 0 0 1 -4,4 h-28 a4,4 0 0 1 -4,-4 v-40 a4,4 0 0 1 4,-4 z">
+            <aapt:attr name="android:fillColor">
+                <gradient android:type="linear" android:startX="36" android:startY="30" android:endX="72" android:endY="78">
+                    <item android:offset="0" android:color="#FF6EF3D6" />
+                    <item android:offset="0.35" android:color="#FF8AA2FF" />
+                    <item android:offset="0.7" android:color="#FFE48BFF" />
+                    <item android:offset="1" android:color="#FFFFCF8A" />
+                </gradient>
+            </aapt:attr>
+        </path>
+        <path android:fillColor="#FF0B0D14" android:pathData="M42,36 h24 v20 h-24 z" />
+        <path android:fillColor="#FFFFFFFF" android:fillAlpha="0.85" android:pathData="M42,60 h18 v3 h-18 z M42,66 h12 v3 h-12 z" />
+    </group>
+    <path android:fillColor="#FFFFFFFF" android:pathData="M28,53 h52 v2.4 h-52 z" />
+    <path android:strokeColor="#FFFFFFFF" android:strokeWidth="2.6" android:strokeLineCap="round"
+        android:pathData="M30,40 v-8 h8 M78,40 v-8 h-8 M30,68 v8 h8 M78,68 v8 h-8" />
+</vector>
