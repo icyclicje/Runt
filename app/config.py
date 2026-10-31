@@ -28,12 +28,12 @@ def resource_dir() -> str:
 
 
 SENSITIVITY = {
-    # name: (min agreeing keypoints, min fingerprint score, frames in a row that must agree)
-    # Measured on synthetic camera frames: the right card gets ~75-340 agreeing keypoints,
-    # a card that isn't in the set rarely more than ~30.
-    'relaxed': (20, 0.20, 2),
-    'balanced': (30, 0.25, 3),
-    'strict': (45, 0.30, 4),
+    # name: (evidence needed to confirm a card, minimum number of frames it was seen in)
+    # Evidence is the fading sum of sighting strengths (0..1 each, see detector.strength_of),
+    # so 'balanced' takes about two clear frames or three or four doubtful ones.
+    'relaxed': (0.9, 1),
+    'balanced': (1.5, 2),
+    'strict': (2.4, 3),
 }
 
 DEFAULTS = {
@@ -48,6 +48,8 @@ DEFAULTS = {
     # scanning
     'paused': False,
     'detect_mode': 'auto',         # auto (find the card) | both (fall back to the guide box) | guide
+    'use_keypoints': True,         # also find cards by their artwork (works without visible edges)
+    'max_cards': 6,                # cards that can be scanned in one frame (laid out on a table)
     'guide_size': 0.8,
     'sensitivity': 'balanced',
     'scope': 'pack',               # pack (this set only) | selected | prepared (every set downloaded)
@@ -114,7 +116,7 @@ CHOICES = {
 }
 
 RANGES = {
-    'camera_fps': (5, 60), 'guide_size': (0.3, 0.98), 'rescan_gap': (0.2, 10), 'max_fps': (2, 60),
+    'camera_fps': (5, 60), 'guide_size': (0.3, 0.98), 'max_cards': (1, 10), 'rescan_gap': (0.2, 10), 'max_fps': (2, 60),
     'pack_size': (0, 40), 'volume': (0, 1), 'hit_value': (0, 100000), 'big_hit_value': (0, 100000),
     'voice_rate': (-5, 5), 'hud_width': (0.15, 1.5), 'hud_distance': (0.3, 3), 'hud_height': (-1, 1),
     'hud_opacity': (0.2, 1), 'hud_fps': (2, 30), 'refresh_hours': (0, 720), 'port': (1024, 65535),

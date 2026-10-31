@@ -125,15 +125,22 @@ function renderLive() {
   const st = $('#camera-status');
   const state = (live && live.state) || (S && S.state) || 'loading';
   st.className = 'camera-status ' + state;
-  let msg = (live && live.message) || (S && S.message) || '';
-  let steps = '';
-  if (live && state === 'scanning' && live.pending > 0 && live.need) {
-    msg = `Reading ${esc(live.pendingName || 'card')}…`;
-    steps = '<span class="steps">' + Array.from({ length: live.need }, (_, i) => `<i class="${i < live.pending ? 'on' : ''}"></i>`).join('') + '</span>';
-  } else if (live && state === 'scanning' && live.locked) {
-    msg = `Got it: ${esc(live.lockedName || '')} · show the next card`;
+  let msg = esc((live && live.message) || (S && S.message) || '');
+  let extra = '';
+  st.classList.remove('hint');
+  if (live && state === 'scanning') {
+    if (live.pendingName && live.progress > 0) {
+      msg = `Reading ${esc(live.pendingName)}…`;
+      extra = `<span class="prog"><i style="width:${Math.round(live.progress * 100)}%"></i></span>`;
+    } else if (live.hintText) {
+      msg = esc(live.hintText);
+      st.classList.add('hint');
+    } else if (live.lockedNames && live.lockedNames.length) {
+      const n = live.lockedNames.length;
+      msg = n === 1 ? `Got it: ${esc(live.lockedNames[0])} · show the next card` : `Got ${n} cards in view · show the next one`;
+    }
   }
-  st.innerHTML = `<i class="dot"></i><span>${msg}</span>${steps}`;
+  st.innerHTML = `<i class="dot"></i><span>${msg}</span>${extra}`;
 }
 async function pollLive() {
   if (tab === 'scan' && document.visibilityState === 'visible') {
@@ -453,7 +460,9 @@ const SETTINGS = [
   ] },
   { title: 'Scanning', items: [
     { key: 'sensitivity', label: 'Scan sensitivity', labels: { relaxed: 'Relaxed: fastest, more mistakes', balanced: 'Balanced', strict: 'Strict: slowest, fewest mistakes' } },
-    { key: 'detect_mode', label: 'Finding the card', labels: { auto: 'Automatic', both: 'Automatic, else guide box', guide: 'Guide box only' }, help: 'Use the guide box if your camera struggles to see card edges: hold the card to fill the box.' },
+    { key: 'use_keypoints', label: 'Recognise cards by their artwork', type: 'bool', help: 'Finds cards even when their edges are hard to see: busy tables, sleeves, toploaders, fingers over the border. Recommended.' },
+    { key: 'max_cards', label: 'Cards scanned at once', type: 'number', help: 'Lay several new cards on the table under the camera and they are all scanned together.' },
+    { key: 'detect_mode', label: 'Finding the card’s edges', labels: { auto: 'Automatic', both: 'Automatic, else guide box', guide: 'Guide box only' }, help: 'Use the guide box if your camera struggles to see card edges: hold the card to fill the box.' },
     { key: 'guide_size', label: 'Guide box size', type: 'range', step: 0.01, pct: true },
     { key: 'scope', label: 'Cards to look for', labels: { pack: 'Only the set I am opening', selected: 'That set + sets I pick', prepared: 'Every downloaded set' }, help: 'Fewer sets = faster and more accurate.' },
     { key: 'scope_sets', label: 'Extra sets to look for', type: 'sets' },

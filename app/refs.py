@@ -1,9 +1,12 @@
-"""Per-set reference fingerprints.
+"""Per-set reference data.
 
-The first time a set is used, every card scan in it is downloaded once,
-straightened to the scanner's 200x280 greyscale format and fingerprinted.
-The result is cached on disk (one small .npz per set), so later sessions load
-in a few milliseconds.
+The first time a set is used, every card scan in it is downloaded once and
+stored as a 240x336 greyscale image (about the scans' native size). From those
+images we derive, and cache alongside them:
+  * fingerprints (vision.describe) for the outline-based matcher,
+  * ORB keypoints (features.ref_features) for the keypoint matcher.
+When the scanner's algorithms change, the derived data is recomputed from the
+stored images in a second or two; nothing is downloaded again.
 """
 from __future__ import annotations
 
@@ -17,19 +20,59 @@ import urllib.request
 import cv2
 import numpy as np
 
-from . import vision
+from . import features, vision
 
 log = logging.getLogger(__name__)
 UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) MivimooseScanner/1.0'
 
+IMG_VERSION = 2                                   # bump only if the stored images themselves change
+DERIVED_VERSION = vision.DESC_VERSION * 1000 + features.FEAT_VERSION
+
 
 class RefIndex:
-    def __init__(self, set_id: str, keys: list[str], desc: np.ndarray, canon: np.ndarray, missing: list[str]):
+    def __init__(self, set_id, keys, ref, desc, kp_pts, kp_des, kp_off, missing):
         self.set_id = set_id
         self.keys = keys
-        self.desc = desc
-        self.canon = canon
+        self.ref = ref                            # N x REF_H x REF_W uint8
+        self.desc = desc                          # fingerprints, N x D float32
+        self.kp_pts, self.kp_des, self.kp_off = kp_pts, kp_des, kp_off
         self.missing = missing
+        self._canon = None
+
+    @property
+    def canon(self) -> np.ndarray:
+        """The images at the fingerprint size (computed on first use)."""
+        if self._canon is None:
+            self._canon = np.stack([cv2.resize(r, (vision.CANON_W, vision.CANON_H), interpolation=cv2.INTER_AREA)
+                                    for r in self.ref]) if len(self.ref) else np.zeros((0, vision.CANON_H, vision.CANON_W), np.uint8)
+        return self._canon
+
+    def keypoints(self, i: int):
+        a, b = self.kp_off[i], self.kp_off[i + 1]
+        return self.kp_pts[a:b], self.kp_des[a:b]
+
+
+def reference_image(img: np.ndarray) -> np.ndarray:
+    """A downloaded card scan as the stored REF_H x REF_W greyscale image."""
+    img = vision.flatten_alpha(img, 200)
+    g = vision.to_gray(img)
+    interp = cv2.INTER_AREA if g.shape[0] >= features.REF_H else cv2.INTER_CUBIC
+    return cv2.resize(g, (features.REF_W, features.REF_H), interpolation=interp)
+
+
+def derive(ref: np.ndarray):
+    """Fingerprints and keypoints for a stack of reference images."""
+    n = len(ref)
+    if not n:
+        return np.zeros((0, 1), np.float32), np.zeros((0, 2), np.float32), np.zeros((0, 32), np.uint8), np.zeros(1, np.int32)
+    canon = [cv2.resize(r, (vision.CANON_W, vision.CANON_H), interpolation=cv2.INTER_AREA) for r in ref]
+    with cf.ThreadPoolExecutor(8) as pool:
+        desc = list(pool.map(vision.describe, canon))
+        kps = list(pool.map(features.ref_features, ref))
+    off = np.zeros(n + 1, np.int32)
+    off[1:] = np.cumsum([len(p) for p, _ in kps])
+    return (np.stack(desc).astype(np.float32), np.concatenate([p for p, _ in kps]).astype(np.float32),
+            np.concatenate([d for _, d in kps]).astype(np.uint8), off)
 
 
 def _download(url: str, timeout: float = 20, tries: int = 3) -> bytes:
@@ -66,13 +109,13 @@ class RefStore:
 
     def _path(self, set_id: str) -> str:
         safe = ''.join(ch if ch.isalnum() or ch in '-_.' else '_' for ch in set_id)
-        return os.path.join(self.dir, f'{safe}.v{vision.DESC_VERSION}.npz')
+        return os.path.join(self.dir, f'{safe}.r{IMG_VERSION}.npz')
 
     def cached(self, set_id: str) -> bool:
         return set_id in self._mem or os.path.exists(self._path(set_id))
 
     def cached_ids(self) -> list[str]:
-        suffix = f'.v{vision.DESC_VERSION}.npz'
+        suffix = f'.r{IMG_VERSION}.npz'
         return [f[:-len(suffix)] for f in os.listdir(self.dir) if f.endswith(suffix)]
 
     def load(self, set_id: str) -> RefIndex | None:
@@ -83,18 +126,36 @@ class RefStore:
             return None
         try:
             z = np.load(p, allow_pickle=False)
-            ix = RefIndex(set_id, [str(k) for k in z['keys']], z['desc'].astype(np.float32), z['canon'],
-                          [str(k) for k in z['missing']])
+            keys = [str(k) for k in z['keys']]
+            missing = [str(k) for k in z['missing']]
+            ref = z['ref']
+            if int(z['derived']) == DERIVED_VERSION:
+                ix = RefIndex(set_id, keys, ref, z['desc'].astype(np.float32), z['kp_pts'], z['kp_des'], z['kp_off'], missing)
+            else:                                   # algorithms changed: recompute from the stored images
+                t0 = time.time()
+                ix = RefIndex(set_id, keys, ref, *derive(ref), missing)
+                self._save(ix)
+                log.info('re-derived %s in %.1fs', set_id, time.time() - t0)
         except Exception as e:
             log.warning('bad reference cache %s: %s', p, e)
-            os.remove(p)
+            try:
+                os.remove(p)
+            except OSError:
+                pass
             return None
         self._mem[set_id] = ix
         return ix
 
+    def _save(self, ix: RefIndex):
+        tmp = self._path(ix.set_id) + '.tmp.npz'
+        np.savez_compressed(tmp, keys=np.array(ix.keys), missing=np.array(ix.missing), ref=ix.ref,
+                            derived=np.int64(DERIVED_VERSION), desc=ix.desc.astype(np.float16),
+                            kp_pts=ix.kp_pts.astype(np.float32), kp_des=ix.kp_des, kp_off=ix.kp_off)
+        os.replace(tmp, self._path(ix.set_id))
+
     def delete(self, set_id: str | None = None) -> None:
         for f in os.listdir(self.dir):
-            if set_id is None or f.startswith(set_id + '.v'):
+            if set_id is None or f.startswith(set_id + '.r') or f.startswith(set_id + '.v'):
                 os.remove(os.path.join(self.dir, f))
         if set_id is None:
             self._mem.clear()
@@ -124,8 +185,7 @@ class RefStore:
     def _build(self, card_set, progress, cancel) -> RefIndex:
         cards = [c for c in card_set.cards if c.img]
         missing = [c.key for c in card_set.cards if not c.img]
-        # 1st Edition sets share their artwork with the base set
-        base = None
+        base = None                                     # 1st Edition sets share their artwork with the base set
         if card_set.first_edition and card_set.base_id:
             base = self.load(card_set.base_id)
         total = len(cards)
@@ -134,11 +194,11 @@ class RefStore:
         t0 = time.time()
 
         if base is not None:
-            canon_by_base = dict(zip(base.keys, base.canon))
+            by_base = dict(zip(base.keys, base.ref))
             for c in cards:
                 bk = c.key.replace(card_set.id + '|', card_set.base_id + '|', 1)
-                if bk in canon_by_base:
-                    results[c.key] = canon_by_base[bk]
+                if bk in by_base:
+                    results[c.key] = by_base[bk]
             done = len(results)
 
         def work(card):
@@ -149,14 +209,14 @@ class RefStore:
             except Exception as e:
                 log.debug('image failed %s: %s', card.img, e)
                 img = None
-            return card.key, (vision.reference_canon(img) if img is not None else None)
+            return card.key, (reference_image(img) if img is not None else None)
 
         todo = [c for c in cards if c.key not in results]
         with cf.ThreadPoolExecutor(self.workers) as pool:
-            for key, canon in pool.map(work, todo):
+            for key, ref in pool.map(work, todo):
                 done += 1
-                if canon is not None:
-                    results[key] = canon
+                if ref is not None:
+                    results[key] = ref
                 else:
                     missing.append(key)
                 if progress and (done % 4 == 0 or done == total):
@@ -165,12 +225,9 @@ class RefStore:
             raise RuntimeError('cancelled')
 
         keys = [c.key for c in cards if c.key in results]
-        canon = np.stack([results[k] for k in keys]) if keys else np.zeros((0, vision.CANON_H, vision.CANON_W), np.uint8)
-        desc = np.stack([vision.describe(c) for c in canon]) if keys else np.zeros((0, 1), np.float32)
-        ix = RefIndex(card_set.id, keys, desc, canon, missing)
-        tmp = self._path(card_set.id) + '.tmp.npz'
-        np.savez_compressed(tmp, keys=np.array(keys), desc=desc.astype(np.float16), canon=canon, missing=np.array(missing))
-        os.replace(tmp, self._path(card_set.id))
+        ref = np.stack([results[k] for k in keys]) if keys else np.zeros((0, features.REF_H, features.REF_W), np.uint8)
+        ix = RefIndex(card_set.id, keys, ref, *derive(ref), missing)
+        self._save(ix)
         self._mem[card_set.id] = ix
         log.info('prepared %s: %d cards (%d missing) in %.1fs', card_set.id, len(keys), len(missing), time.time() - t0)
         return ix

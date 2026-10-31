@@ -1,7 +1,8 @@
-"""The scanner: camera -> recognition -> confirmed card -> collection, packs, sounds.
+"""The scanner: camera -> detection -> confirmed cards -> collection, packs, sounds.
 
-A card only counts once the same match wins several frames in a row (so a
-card waved past the camera doesn't register by accident). After that it is
+Every frame, the detector finds the cards in view (several at once if they're
+there) and the tracker builds up evidence for each over a few frames, so a card
+waved past the camera doesn't register by accident. A confirmed card is then
 "locked": holding it in view, or showing it again in the same pack, never adds
 it twice. Cards you already own are flagged as duplicates.
 """
@@ -17,8 +18,10 @@ import cv2
 import numpy as np
 
 from . import vision
+from .detector import Detector
 from .camera import FileSource, SteamVRCameraSource, WebcamSource, webcam_names
 from .config import SENSITIVITY
+from .tracker import MultiTracker
 
 log = logging.getLogger(__name__)
 
@@ -51,54 +54,15 @@ class EventBus:
                 pass
 
 
-class Tracker:
-    """Turns noisy per-frame matches into one confirmed scan per card."""
-
-    def __init__(self):
-        self.hist: collections.deque = collections.deque(maxlen=8)
-        self.locked: str | None = None
-        self.locked_seen = 0.0
-        self.pending: str | None = None
-        self.pending_n = 0
-
-    def reset(self, keep_lock: bool = False):
-        """keep_lock: forget partial matches but remember the card still in your hand
-        (so finishing a pack doesn't re-scan its last card into the next one)."""
-        self.hist.clear()
-        self.pending, self.pending_n = None, 0
-        if not keep_lock:
-            self.locked = None
-
-    def update(self, good_key: str | None, seen_key: str | None, now: float, need: int, gap: float) -> str | None:
-        if self.locked is not None:
-            if seen_key == self.locked:
-                self.locked_seen = now
-            elif now - self.locked_seen > gap:
-                self.locked = None                    # the card has left the camera
-        self.hist.append(good_key)
-        if good_key is None or good_key == self.locked:
-            self.pending, self.pending_n = (None, 0) if good_key is None else (self.pending, self.pending_n)
-            return None
-        recent = list(self.hist)[-(need + 1):]
-        n = sum(1 for k in recent if k == good_key)
-        self.pending, self.pending_n = good_key, n
-        if n >= need:
-            self.locked, self.locked_seen = good_key, now
-            self.hist.clear()
-            self.pending, self.pending_n = None, 0
-            return good_key
-        return None
-
-
 class Engine:
     def __init__(self, settings, db, refs, store, sounds, speaker, rates, bus: EventBus):
         self.settings, self.db, self.refs, self.store = settings, db, refs, store
         self.sounds, self.speaker, self.rates, self.bus = sounds, speaker, rates, bus
         self.vr = None                                # set by main once the VR manager exists
         self.lock = threading.RLock()
-        self.matcher = vision.Matcher()
+        self.detector = Detector()
         self.matcher_sets: list[str] = []
-        self.tracker = Tracker()
+        self.tracker = MultiTracker()
         self.camera = None
         self.camera_id = None
         self.next_variant: str | None = None
@@ -238,14 +202,14 @@ class Engine:
         ids = self.scope_set_ids()
         missing = [i for i in ids if not self.refs.cached(i)]
         ready = [ix for ix in (self.refs.load(i) for i in ids if i not in missing) if ix is not None]
-        m = vision.Matcher()
-        m.load(ready)
+        d = Detector()
+        d.load(ready)
         with self.lock:
-            self.matcher, self.matcher_sets = m, [ix.set_id for ix in ready]
+            self.detector, self.matcher_sets = d, [ix.set_id for ix in ready]
         self.tracker.reset(keep_lock=True)
         if missing:
             self.prepare_sets(missing)
-        self.bus.emit('matcher', sets=self.matcher_sets, cards=len(m))
+        self.bus.emit('matcher', sets=self.matcher_sets, cards=len(d))
 
     def prepare_sets(self, set_ids: list[str]):
         """Download & fingerprint sets in the background, then reload the matcher."""
@@ -297,7 +261,7 @@ class Engine:
             if frame is None or seq2 == seq:
                 continue
             seq = seq2
-            if s['paused'] or self.waiting_next_pack or not len(self.matcher):
+            if s['paused'] or self.waiting_next_pack or not len(self.detector):
                 self.vis = {'ts': time.time(), 'idle': True}
                 time.sleep(0.05)
                 continue
@@ -322,22 +286,51 @@ class Engine:
         if gray.shape[1] > 1280:
             scale = 1280 / gray.shape[1]
             gray = cv2.resize(gray, None, fx=scale, fy=scale, interpolation=cv2.INTER_AREA)
-        matcher = self.matcher
-        r = vision.recognize(gray, matcher, mode=s['detect_mode'], guide_size=s['guide_size'])
-        min_inl, min_score, need = SENSITIVITY.get(s['sensitivity'], SENSITIVITY['balanced'])
+        det = self.detector
+        dets = det.analyze(gray, mode=s['detect_mode'], guide_size=s['guide_size'],
+                           use_keypoints=s['use_keypoints'], max_cards=s['max_cards'])
+        threshold, min_sightings = SENSITIVITY.get(s['sensitivity'], SENSITIVITY['balanced'])
         now = time.time()
-        good = r is not None and r.inliers >= min_inl and r.score >= min_score and r.sharp > 15
-        # weaker evidence is enough to know the locked card is still in view
-        seen = r.key if (r is not None and (r.inliers >= min_inl // 2 or r.score >= 0.6)) else None
-        confirmed = self.tracker.update(r.key if good else None, seen, now, need, s['rescan_gap'])
+        confirmed = self.tracker.update(dets, now, threshold, 0.5, s['rescan_gap'], min_sightings)
+        pend_key, pend_prog = self.tracker.pending(threshold)
+        locked = set(self.tracker.locked)
         self.vis = {
-            'ts': now, 'quad': (r.quad / scale).tolist() if r is not None else None,
-            'key': r.key if r is not None else None, 'score': r.score if r is not None else 0,
-            'good': good, 'locked': self.tracker.locked, 'pending': self.tracker.pending_n, 'need': need,
-            'source': r.source if r is not None else None,
+            'ts': now,
+            'dets': [{'quad': (d.quad / scale).tolist(), 'key': d.key, 'strength': d.strength,
+                      'state': 'locked' if d.key in locked else 'pending'} for d in dets],
+            'unknown': [(q / scale).tolist() for q, _, _ in det.last_unknown],
+            'pending': pend_key, 'progress': pend_prog,
+            'hint': self._hint(dets, det.last_unknown, gray.shape, now),
         }
-        if confirmed:
-            self._on_confirm(confirmed, r)
+        for key, d in confirmed:
+            self._on_confirm(key, d)
+
+    def _hint(self, dets, unknown, shape, now) -> str | None:
+        """A tip for the person scanning when a card is in view but isn't being read well."""
+        frame_area = shape[0] * shape[1]
+        cand = None
+        if dets and dets[0].key not in self.tracker.locked and dets[0].strength < 0.35:
+            d = dets[0]
+            cand = (d.area, d.sharp, d.glare, True)
+        elif not dets and unknown:
+            q, sharp, glare = unknown[0]
+            cand = (abs(cv2.contourArea(np.float32(q))), sharp, glare, False)
+        if cand is None:
+            self._unknown_since = None
+            return None
+        area, sharp, glare, known = cand
+        if area < 0.05 * frame_area:
+            return 'closer'
+        if sharp < 20:
+            return 'steady'
+        if glare > 0.06:
+            return 'glare'
+        if not known:
+            # a clear, card-sized shape that matches nothing for a while: probably another set
+            self._unknown_since = getattr(self, '_unknown_since', None) or now
+            if now - self._unknown_since > 1.5:
+                return 'unknown'
+        return None
 
     # ================================================================ scans & packs
 
@@ -639,7 +632,7 @@ class Engine:
             return 'loading', self.data_error or 'Loading the card database…'
         if not cs:
             return 'no_set', 'Choose the set you are opening'
-        if self.prep and self.prep.get('running') and not len(self.matcher):
+        if self.prep and self.prep.get('running') and not len(self.detector):
             return 'preparing', f"Getting {self.prep.get('name', 'set')} ready to scan…"
         if self.camera is None or self.camera.status != 'live':
             return 'no_camera', (self.camera.error if self.camera else 'No camera selected') or 'Starting camera…'
@@ -649,6 +642,13 @@ class Engine:
             return 'pack_done', 'Pack complete. Press Next pack to keep going'
         return 'scanning', 'Hold a card up to the camera'
 
+    HINTS = {
+        'closer': 'Move the card closer to the camera',
+        'steady': 'Hold the card still for a moment',
+        'glare': 'Tilt the card a little: there is glare on it',
+        'unknown': 'Card not recognised. Is it from the set you chose?',
+    }
+
     def live(self) -> dict:
         """Small, cheap snapshot for the 'hold steady' indicator (polled several times a second)."""
         active = self.settings['active_set']
@@ -656,12 +656,15 @@ class Engine:
         st, msg = self._status(cs)
         v = self.vis or {}
         fresh = time.time() - v.get('ts', 0) < 0.8
-        pk = v.get('key') if fresh and v.get('pending') else None
-        lk = self.tracker.locked
-        pc, lc = (self.db.card(pk) if pk else None), (self.db.card(lk) if lk else None)
-        return {'state': st, 'message': msg, 'pending': v.get('pending', 0) if fresh else 0, 'need': v.get('need', 0),
-                'pendingName': pc.name if pc else None, 'locked': lk, 'lockedName': lc.name if lc else None,
-                'fps': round(self.proc_fps, 1)}
+        pk = v.get('pending') if fresh else None
+        pc = self.db.card(pk) if pk else None
+        locked = [self.db.card(k) for k in self.tracker.locked]
+        in_view = [d for d in v.get('dets', [])] if fresh else []
+        hint = v.get('hint') if fresh else None
+        return {'state': st, 'message': msg, 'progress': round(v.get('progress', 0.0), 2) if pc else 0.0,
+                'pendingName': pc.name if pc else None,
+                'lockedNames': [c.name for c in locked if c][:6], 'cards': len(in_view),
+                'hint': hint, 'hintText': self.HINTS.get(hint), 'fps': round(self.proc_fps, 1)}
 
     def state(self) -> dict:
         s = self.settings
@@ -682,7 +685,7 @@ class Engine:
             'camera_id': self.camera_id,
             'vr': self.vr.info() if self.vr else {'connected': False},
             'prep': self.prep,
-            'matcher': {'sets': self.matcher_sets, 'cards': len(self.matcher)},
+            'matcher': {'sets': self.matcher_sets, 'cards': len(self.detector)},
             'perf': {'fps': round(self.proc_fps, 1), 'ms': round(self.proc_ms, 1)},
             'data': {'status': self.db.status, 'updated': self.db.updated, 'ready': self.data_ready},
             'rates': self.rates.rates,
@@ -719,20 +722,24 @@ class Engine:
             g = vision.guide_quad(img.shape, s['guide_size'])
             cv2.polylines(img, [g.astype(np.int32)], True, (200, 200, 200), 1, cv2.LINE_AA)
         v = self.vis
-        if v and v.get('quad') is not None and time.time() - v.get('ts', 0) < 0.6:
-            q = (np.array(v['quad']) * sc).astype(np.int32)
-            if v.get('locked') and v.get('key') == v.get('locked'):
-                col = (129, 224, 62)                       # green: scanned
-            elif v.get('good'):
-                col = (5, 203, 255)                        # yellow: confirming
-            else:
-                col = (125, 107, 255)                      # red-ish: not recognised
-            cv2.polylines(img, [q], True, col, max(2, int(3 * sc + 1)), cv2.LINE_AA)
-            card = self.db.card(v['key']) if v.get('key') and (v.get('good') or v.get('locked')) else None
-            if card:
-                label = f"{card.name}  #{card.number}"
-                p = q[np.argmin(q[:, 1])]
-                y = max(24, int(p[1]) - 10)
-                cv2.putText(img, label, (int(p[0]), y), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 0, 0), 4, cv2.LINE_AA)
-                cv2.putText(img, label, (int(p[0]), y), cv2.FONT_HERSHEY_SIMPLEX, 0.7, col, 2, cv2.LINE_AA)
+        if v and time.time() - v.get('ts', 0) < 0.6:
+            th = max(2, int(3 * sc + 1))
+            for q in v.get('unknown', []):
+                cv2.polylines(img, [(np.array(q) * sc).astype(np.int32)], True, (125, 107, 255), max(1, th - 1), cv2.LINE_AA)
+            for d in v.get('dets', []):
+                q = (np.array(d['quad']) * sc).astype(np.int32)
+                if d['state'] == 'locked':
+                    col = (129, 224, 62)                   # green: scanned
+                elif d['strength'] >= 0.35:
+                    col = (5, 203, 255)                    # yellow: confirming
+                else:
+                    col = (125, 107, 255)                  # red: not sure yet
+                cv2.polylines(img, [q], True, col, th, cv2.LINE_AA)
+                card = self.db.card(d['key'])
+                if card and (d['state'] == 'locked' or d['strength'] >= 0.35):
+                    label = f"{card.name}  #{card.number}"
+                    p = q[np.argmin(q[:, 1])]
+                    y = max(24, int(p[1]) - 10)
+                    cv2.putText(img, label, (int(p[0]), y), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 0, 0), 4, cv2.LINE_AA)
+                    cv2.putText(img, label, (int(p[0]), y), cv2.FONT_HERSHEY_SIMPLEX, 0.7, col, 2, cv2.LINE_AA)
         return img

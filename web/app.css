@@ -153,9 +153,10 @@ input:focus, select:focus { outline: 2px solid var(--blue); outline-offset: 1px;
 .camera-status .dot { width: 10px; height: 10px; border-radius: 50%; background: var(--good); }
 .camera-status.paused .dot, .camera-status.pack_done .dot { background: var(--accent); }
 .camera-status.no_camera .dot, .camera-status.loading .dot { background: var(--bad); }
-.camera-status .steps { display: flex; gap: 4px; }
-.camera-status .steps i { width: 18px; height: 6px; border-radius: 3px; background: var(--panel2); }
-.camera-status .steps i.on { background: var(--accent); }
+.camera-status .prog { width: 110px; height: 7px; border-radius: 4px; background: var(--panel2); overflow: hidden; }
+.camera-status .prog i { display: block; height: 100%; background: var(--accent); border-radius: inherit; transition: width .2s; }
+.camera-status.hint { border-color: var(--accent); }
+.camera-status.hint .dot { background: var(--accent); animation: pulse 1.2s infinite; }
 .controls { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 12px; }
 .controls .btn { flex: 1 1 150px; }
 
