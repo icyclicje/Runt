@@ -114,22 +114,22 @@ one generic estimate.
 ### Scanning results
 
 Synthetic phone footage: each card is brought up to the camera, held about a second and
-taken away, at 720x1280 (a real phone gives the scanner 1080x1920). Measured on the
-Android emulator running the whole app, starting with no set loaded:
+taken away, at 720x1280 (a real phone gives the scanner 1080x1920). Measured on the Android
+emulator running the whole app, starting with no set loaded, non-card objects first:
 
-| Test | Scanned | False scans |
+| Test | Scanned | False or double scans |
 |---|---|---|
-| 151, all rarities, held in the guide (30 cards) | 28/30 | 0 |
-| Prismatic Evolutions rares: SIR, hyper rare, ultra rare (20 cards) | 17/20 | 0 |
+| 151, all rarities, held in the guide (30 cards) | 30/30 | 0 |
+| Non-card objects (27: booster packs, posters of card art, printed checklists, books, phones, keyboards, card backs) | none | 0, and outlined as a card in 0 of 1,181 frames |
 
-Every miss was one of the first cards of a run. With no set loaded yet, a card is first
-identified from its printed text, its scan is downloaded and checked, and that takes a
-couple of seconds, longer than the test holds each card. In use you keep holding the card
-until it scans. Once one card is found its set is loaded and the rest scan on the first
-frame they're held. Only the card in the guide counts: cards lying around it are ignored.
+The emulator is slow, so it gets more text reads per card than this footage's length
+suggests. It hasn't been measured on a real phone with a real camera.
 
-Recognition alone (desktop, sets loaded): 39/40 handheld, 29/30 modern rares, 28/30 in
-hard conditions (blur, glare, steep angles), no false or double scans.
+Recognition alone (desktop, sets already loaded): 30/30 phone footage, 39/40 handheld, 29/30
+modern rares, 28/30 in hard conditions (blur, glare, steep angles), no false or double
+scans. Non-card objects with their artwork's sets loaded: outlined in 9 of 1,181 frames, and
+one scan, of a test background that is a picture of a real card filling the whole frame,
+which looks the same as a card held very close.
 
 ### Building
 
