@@ -147,7 +147,7 @@ fun PacksScreen(vm: AppVM, nav: NavHostController) {
                     Spacer(Modifier.height(8.dp))
                     LazyRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                         items(scans.sortedByDescending { it.price }) { s ->
-                            c.card(s.cardKey)?.let { card -> CardImage(card, Modifier.width(44.dp).tierGlow(tierOf(s.price), androidx.compose.foundation.shape.RoundedCornerShape(4.dp))) }
+                            c.card(s.cardKey)?.let { card -> CardImage(card, Modifier.width(44.dp).tierGlow(tierOf(s.price), androidx.compose.foundation.shape.RoundedCornerShape(4.dp), small = true)) }
                         }
                     }
                 }

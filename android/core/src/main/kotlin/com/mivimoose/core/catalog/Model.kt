@@ -115,6 +115,12 @@ class CardSet(
         }
 
     val mainCount: Int get() = cards.count { it.mainSet }
+
+    /** Cards in collector-number order: the main set by number, then subsets (TG, GG, SV...). */
+    val sortedCards: List<Card> by lazy {
+        cards.sortedWith(compareBy<Card>({ it.number.takeWhile { c -> !c.isDigit() }.isNotEmpty() }, { it.number.takeWhile { c -> !c.isDigit() } },
+            { it.number.filter { c -> c.isDigit() }.toIntOrNull() ?: Int.MAX_VALUE }, { it.number }, { it.order }))
+    }
     val isInternational get() = lang != "en"
     val displayName get() = name
 

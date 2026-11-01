@@ -113,10 +113,12 @@ class ScanEngine {
         val a = try { rec.analyze(gray) } catch (e: Exception) { Log.w(TAG, "analyze", e); return }
         val w = gray.cols(); val h = gray.rows()
         val sightings = HashMap<String, Float>()
-        for (s in a.sightings) if (s.strength > 0f) sightings[s.key] = maxOf(sightings[s.key] ?: 0f, s.strength)
+        // Only the card held in the guide counts, not cards lying around it on the table.
+        for (s in a.sightings) if (s.strength > 0f && inGuide(s.quad, w, h)) sightings[s.key] = maxOf(sightings[s.key] ?: 0f, s.strength)
 
         // Card text: when there's a card but vision isn't sure (or the pool doesn't have it).
-        val quad = a.main
+        val quad = a.sightings.firstOrNull { it.strength > 0f && inGuide(it.quad, w, h) }?.quad
+            ?: a.outlines.firstOrNull { inGuide(it.quad, w, h) }?.quad
         val visualSure = a.sightings.firstOrNull()?.let { it.strength >= 0.55f } ?: false
         val now = System.currentTimeMillis()
         // No outline (card filling the frame, corners cut off, low contrast): read the guide box,
@@ -136,7 +138,7 @@ class ScanEngine {
                 sightings[tc.card.key] = maxOf(sightings[tc.card.key] ?: 0f, st)
             }
         }
-        val confirmed = tracker.update(t, sightings, a.outlines.isNotEmpty())
+        val confirmed = tracker.update(t, sightings, quad != null)
         val prog = tracker.progress()
         val hint = when {
             quad == null -> "Show a card to the camera"
@@ -158,6 +160,9 @@ class ScanEngine {
         if (confirmed != null) confirm(c, resolveReprint(c, confirmed), a.sightings.firstOrNull()?.cands?.mapNotNull { c.card(it.key) } ?: emptyList(),
             if (a.sightings.any { it.key == confirmed }) "vision" else "text")
     }
+
+    private fun inGuide(q: Quad, w: Int, h: Int): Boolean =
+        q.cx in 0.18f * w..0.82f * w && q.cy in 0.18f * h..0.82f * h && q.area > 0.06f * w * h
 
     /** The card straightened at high resolution for the text reader. */
     private fun cardBitmap(gray: Mat, q: Quad): Bitmap {
@@ -204,8 +209,10 @@ class ScanEngine {
         textCands = cands
         textAt = System.currentTimeMillis()
         // Let vision double-check the likely cards (more of them when the text was weak)
+        // only in the leading card's language: a same-art print in another language would compete
         val n = if (cands.first().score >= 0.7f) 3 else 8
-        Graph.refs.addCards(c, cands.take(n).map { it.card.key })
+        val lang = cands.first().card.lang
+        Graph.refs.addCards(c, cands.filter { it.card.lang == lang }.take(n).map { it.card.key })
     }
 
     /** Same artwork in two sets can't be told apart by sight: trust a fresh text read for which. */
@@ -215,8 +222,16 @@ class ScanEngine {
         return if (tc.card.key != key && Catalog.fold(tc.card.name) == Catalog.fold(card.name)) tc.card.key else key
     }
 
+    private var lastName = ""
+    private var lastAt = 0L
+
     private fun confirm(c: Catalog, key: String, cands: List<Card>, via: String) {
         val card = c.card(key) ?: return
+        // A same-name card moments after the last scan is the same physical card seen as a reprint
+        // or another language's print, not a second card.
+        val now = System.currentTimeMillis()
+        if (via != "manual" && Catalog.fold(card.name) == lastName && now - lastAt < 3000) { lastAt = now; return }
+        lastName = Catalog.fold(card.name); lastAt = now
         Log.i(TAG, "confirmed $key via $via; text=${textCands.firstOrNull()?.let { it.card.key + " %.2f".format(it.score) }}")
         val s = Graph.prefs.value
         val store = Graph.store
@@ -304,7 +319,7 @@ class ScanEngine {
     fun rescan() { tracker.reset() }
 
     /** Forget the current card and text reads (between benchmark sequences). */
-    fun resetForBench() { tracker.reset(); textCands = emptyList(); textAt = 0L }
+    fun resetForBench() { tracker.reset(); textCands = emptyList(); textAt = 0L; lastName = ""; lastAt = 0L }
 
     fun close() { scope.cancel(); ocr.close() }
 

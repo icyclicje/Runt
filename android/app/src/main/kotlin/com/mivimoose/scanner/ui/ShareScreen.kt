@@ -219,7 +219,7 @@ private fun SetPoster(s: com.mivimoose.core.catalog.CardSet, sp: com.mivimoose.s
         }
         // the whole set as tiles: owned bright, missing dark
         val cols = 15
-        for (row in s.cards.chunked(cols)) Row(Modifier.padding(bottom = 3.dp), horizontalArrangement = Arrangement.spacedBy(3.dp)) {
+        for (row in s.sortedCards.chunked(cols)) Row(Modifier.padding(bottom = 3.dp), horizontalArrangement = Arrangement.spacedBy(3.dp)) {
             for (c in row) Box(Modifier.weight(1f).aspectRatio(0.72f).clip(RoundedCornerShape(2.dp)).background(if (c.key in owned) Vault.mint else Vault.surface3))
             repeat(cols - row.size) { Spacer(Modifier.weight(1f)) }
         }
@@ -250,6 +250,7 @@ private suspend fun shareBitmap(ctx: Context, bmp: Bitmap) {
     }
     val uri = FileProvider.getUriForFile(ctx, ctx.packageName + ".files", f)
     val send = Intent(Intent.ACTION_SEND).setType("image/png").putExtra(Intent.EXTRA_STREAM, uri).addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+    send.clipData = android.content.ClipData.newRawUri("", uri)     // lets the share sheet preview the picture
     ctx.startActivity(Intent.createChooser(send, "Share picture"))
     Graph.sounds.play("select")
 }

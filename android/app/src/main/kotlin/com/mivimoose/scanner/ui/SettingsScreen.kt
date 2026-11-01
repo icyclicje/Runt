@@ -179,5 +179,7 @@ private suspend fun exportCsv(ctx: Context) {
         File(File(ctx.cacheDir, "share").apply { mkdirs() }, "mivimoose-collection.csv").also { it.writeText(sb.toString()) }
     }
     val uri = FileProvider.getUriForFile(ctx, ctx.packageName + ".files", f)
-    ctx.startActivity(Intent.createChooser(Intent(Intent.ACTION_SEND).setType("text/csv").putExtra(Intent.EXTRA_STREAM, uri).addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION), "Export collection"))
+    val send = Intent(Intent.ACTION_SEND).setType("text/csv").putExtra(Intent.EXTRA_STREAM, uri).addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+    send.clipData = android.content.ClipData.newRawUri("", uri)
+    ctx.startActivity(Intent.createChooser(send, "Export collection"))
 }

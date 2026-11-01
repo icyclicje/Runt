@@ -66,7 +66,7 @@ fun SetScreen(vm: AppVM, nav: NavHostController, setId: String) {
     val owned = p?.holdings?.filter { it.card.setId == setId }?.groupBy { it.card.key }?.mapValues { e -> e.value.sumOf { it.owned.qty } } ?: emptyMap()
     val sp = p?.sets?.firstOrNull { it.set.id == setId }
     val packs = Graph.catalog.packs
-    val cards = set.cards.filter {
+    val cards = set.sortedCards.filter {
         when (filter) {
             "owned" -> it.key in owned
             "missing" -> it.key !in owned

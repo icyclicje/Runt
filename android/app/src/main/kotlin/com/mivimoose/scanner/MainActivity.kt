@@ -76,13 +76,24 @@ object Routes {
 }
 
 class MainActivity : ComponentActivity() {
+    /** The latest launch intent: also notification taps and launches while the app is open. */
+    private val launch = androidx.compose.runtime.mutableStateOf<android.content.Intent?>(null)
+
+    override fun onNewIntent(intent: android.content.Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        launch.value = intent
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge(SystemBarStyle.dark(android.graphics.Color.TRANSPARENT), SystemBarStyle.dark(android.graphics.Color.TRANSPARENT))
-        val startCard = intent.getStringExtra("card")
-        val testFrames = intent.getStringExtra("frames")
-        val startRoute = intent.getStringExtra("route")
+        launch.value = intent
         setContent {
+            val li = launch.value
+            val startCard = li?.getStringExtra("card")
+            val testFrames = li?.getStringExtra("frames")
+            val startRoute = li?.getStringExtra("route")
             VaultTheme {
                 val nav = rememberNavController()
                 val vm: AppVM = viewModel()
@@ -108,7 +119,7 @@ class MainActivity : ComponentActivity() {
                     val ready by vm.catalog.collectAsState()
                     if (ready == null) LoadingCards(vm)
                 }
-                androidx.compose.runtime.LaunchedEffect(Unit) {
+                androidx.compose.runtime.LaunchedEffect(li) {
                     when {
                         startCard != null -> nav.navigate(Routes.card(startCard))
                         testFrames != null -> nav.navigate("scan")

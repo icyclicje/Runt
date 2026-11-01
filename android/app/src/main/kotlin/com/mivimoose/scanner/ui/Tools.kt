@@ -236,7 +236,7 @@ private fun EvTool(set: CardSet, nav: NavHostController) {
         for (p in prods) {
             val value = ev * p.packs
             Row(Modifier.padding(vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-                Column(Modifier.weight(1f)) { Text(p.label, fontWeight = FontWeight.SemiBold); Text("${p.packs} packs · avg ${Graph.money.fmt(value, cents = false)}", color = Vault.muted, fontSize = 12.sp) }
+                Column(Modifier.weight(1f)) { Text(p.label, fontWeight = FontWeight.SemiBold); Text("${p.packs} ${if (p.packs == 1) "pack" else "packs"} · avg ${Graph.money.fmt(value, cents = false)}", color = Vault.muted, fontSize = 12.sp) }
                 val price = if (p.key == "pack") packPrice else p.price
                 Text(Graph.money.fmt(price, cents = false)); Spacer(Modifier.width(8.dp)); Delta(value / price - 1, small = true)
             }
@@ -299,13 +299,13 @@ private fun PullRatesTool(set: CardSet) {
     }
     Spacer(Modifier.height(12.dp))
     Glass(Modifier.fillMaxWidth()) {
-        Row { Text("Rarity", Modifier.weight(1f), style = Eyebrow); Text("CARDS", Modifier.width(52.dp), style = Eyebrow); Text("ANY ONE", Modifier.width(78.dp), style = Eyebrow); Text("A SPECIFIC CARD", Modifier.width(96.dp), style = Eyebrow) }
+        Row { Text("RARITY", Modifier.weight(1f), style = Eyebrow); Text("CARDS", Modifier.width(48.dp), style = Eyebrow); Text("ANY ONE", Modifier.width(84.dp), style = Eyebrow); Text("ONE CARD", Modifier.width(84.dp), style = Eyebrow) }
         for (r in pm.rarityTable(set)) {
             Row(Modifier.padding(vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
                 Text(r.rarity, Modifier.weight(1f), fontSize = 13.sp, maxLines = 2, color = Vault.tierColor(if (r.tier >= 5) 3 else if (r.tier == 4) 2 else if (r.tier == 3) 1 else 0))
-                Text("${r.cards}", Modifier.width(52.dp), fontSize = 13.sp)
-                Text(oneIn(r.odds), Modifier.width(78.dp), fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
-                Text(oneIn(r.odds / r.cards), Modifier.width(96.dp), fontSize = 13.sp, color = Vault.text2)
+                Text("${r.cards}", Modifier.width(48.dp), fontSize = 13.sp)
+                Text(oneIn(r.odds), Modifier.width(84.dp), fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+                Text(oneIn(r.odds / r.cards), Modifier.width(84.dp), fontSize = 13.sp, color = Vault.text2)
             }
         }
         Text("Odds are per pack. \"Any one\" = any card of that rarity.", color = Vault.muted, fontSize = 11.sp)
@@ -314,7 +314,7 @@ private fun PullRatesTool(set: CardSet) {
 
 private fun oneIn(p: Double): String = when {
     p <= 0 -> "—"
-    p >= 1 -> "%.1f per pack".format(p)
+    p >= 0.95 -> "%.1f/pack".format(p)
     else -> "1 in " + "%,d".format(Math.round(1 / p))
 }
 

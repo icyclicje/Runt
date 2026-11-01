@@ -303,7 +303,7 @@ private fun SessionStrip(items: List<Pair<Card, Double>>, nav: NavHostController
             items(items.take(30)) { (c, price) ->
                 val tier = tierOf(price)
                 Column(Modifier.width(46.dp).clickable { nav.navigate(Routes.card(c.key)) }, horizontalAlignment = Alignment.CenterHorizontally) {
-                    CardImage(c, Modifier.fillMaxWidth().tierGlow(tier, RoundedCornerShape(4.dp)))
+                    CardImage(c, Modifier.fillMaxWidth().tierGlow(tier, RoundedCornerShape(4.dp), small = true))
                     Text(Graph.money.short(price), color = if (tier > 0) Vault.tierColor(tier) else Color.White, fontSize = 10.sp, fontWeight = FontWeight.Bold, maxLines = 1)
                 }
             }

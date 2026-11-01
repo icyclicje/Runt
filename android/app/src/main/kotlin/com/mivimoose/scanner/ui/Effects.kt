@@ -10,6 +10,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.padding
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -28,6 +29,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.rotate
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.mivimoose.scanner.Graph
 import kotlinx.coroutines.delay
@@ -97,7 +99,9 @@ fun JackpotOverlay(seed: Long, price: String, name: String, onDone: () -> Unit) 
     Box(Modifier.fillMaxSize().alpha(fade.value), contentAlignment = Alignment.Center) {
         Box(Modifier.fillMaxSize().background(Brush.radialGradient(listOf(Vault.gold.copy(alpha = 0.35f), Vault.orchid.copy(alpha = 0.15f), Color.Black.copy(alpha = 0.55f)))))
         Burst(seed, count = 180)
-        Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.scale(scale.value)) {
+        // upper part of the screen, clear of the result card below
+        Column(horizontalAlignment = Alignment.CenterHorizontally,
+            modifier = Modifier.align(Alignment.TopCenter).padding(top = 150.dp).scale(scale.value)) {
             HoloText("JACKPOT", TextStyle(fontSize = 64.sp, fontWeight = FontWeight.Black, letterSpacing = 4.sp))
             androidx.compose.material3.Text(price, style = TextStyle(fontSize = 40.sp, fontWeight = FontWeight.Bold, color = Vault.gold))
             androidx.compose.material3.Text(name, style = TextStyle(fontSize = 18.sp, color = Vault.text))

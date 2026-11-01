@@ -127,8 +127,11 @@ fun HoloSheen(modifier: Modifier = Modifier, alpha: Float = 0.35f, shape: Shape 
 }
 
 /** Glow behind something by value tier. */
-fun Modifier.tierGlow(tier: Int, shape: Shape): Modifier =
-    if (tier <= 0) this else shadow(when (tier) { 3 -> 36.dp; 2 -> 26.dp; else -> 16.dp }, shape, false, Vault.tierColor(tier), Vault.tierColor(tier))
+fun Modifier.tierGlow(tier: Int, shape: Shape, small: Boolean = false): Modifier =
+    if (tier <= 0) this else shadow(
+        if (small) when (tier) { 3 -> 10.dp; 2 -> 7.dp; else -> 5.dp } else when (tier) { 3 -> 36.dp; 2 -> 26.dp; else -> 16.dp },
+        shape, false, Vault.tierColor(tier), Vault.tierColor(tier),
+    )
 
 /** A card's picture: its scan, falling back to TCGplayer's image, then a placeholder. */
 @Composable

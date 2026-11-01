@@ -210,7 +210,9 @@ object TextMatch {
             if (ns >= 0.9f && numExact) score += 0.10f
             if (totals.isNotEmpty() && !tOk && !codeOk) score -= 0.15f
             if (!langMatches(set, clues.script)) score -= 0.25f
+            // Latin text can't tell English from Indonesian: assume English
             if (clues.script == null && set.lang == "en") score += 0.03f
+            if (clues.script == null && set.lang == "id") score -= 0.08f
             if (c.setId in preferredSets) score += 0.05f
             // ties (e.g. a name read without its number) lean towards newer sets: what people open
             score += 0.02f * ((set.year - 1999).coerceIn(0, 27) / 27f)
