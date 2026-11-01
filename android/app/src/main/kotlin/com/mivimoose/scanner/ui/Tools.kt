@@ -147,7 +147,7 @@ fun ToolScreen(vm: AppVM, nav: NavHostController, id: String, setArg: String?) {
     val t = TOOLS.firstOrNull { it.id == id } ?: return
     val cat by vm.catalog.collectAsState()
     Graph.catalog.priceTick.collectAsState().value
-    var setId by rememberSaveable { mutableStateOf(setArg ?: Graph.prefs.value.packSetId ?: cat?.order?.firstOrNull { cat?.set(it)?.lang == "en" && cat?.set(it)?.source == null }) }
+    var setId by rememberSaveable { mutableStateOf(setArg ?: Graph.prefs.value.focusSetId ?: cat?.order?.firstOrNull { cat?.set(it)?.lang == "en" && cat?.set(it)?.source == null }) }
     var picking by remember { mutableStateOf(false) }
     val set = setId?.let { cat?.set(it) }
     Column(Modifier.fillMaxSize().statusBarsPadding()) {
@@ -219,7 +219,7 @@ private fun EvTool(set: CardSet, nav: NavHostController) {
             val pq = Graph.prices.packQuote(set.id)
             Text("Pack price ${Graph.money.fmt(packPrice)}" + when {
                 pq != null && pq.basis == "sales" -> " (live: last ${pq.sales.size} sales)"
-                pq != null -> " (live: cheapest for sale)"
+                pq != null && pq.basis == "listing" -> " (live: cheapest for sale)"
                 set.sealedPrice != null -> " (market)"
                 else -> " (estimated)"
             }, color = Vault.text2, fontSize = 13.sp)

@@ -144,7 +144,7 @@ class Recognizer(val index: CardIndex) {
      *  real edges is tried too and the better match kept. Returns the canon for measuring. */
     private companion object {
         /** Keypoint sighting strength by how many of its outline's sides lie on edges (0..4). */
-        val SIDE_FACTOR = floatArrayOf(0f, 0.5f, 0.85f, 1f, 1f)
+        val SIDE_FACTOR = floatArrayOf(0.3f, 0.5f, 0.85f, 1f, 1f)
     }
 
     private fun kpSighting(gray: Mat, h: KpHit, edgeMap: EdgeMap?): Pair<Sighting, Mat>? {
@@ -165,10 +165,13 @@ class Recognizer(val index: CardIndex) {
         val margin = if (other != null) score - other else 0.5f
         val sides = edgeMap?.sides(quad) ?: 4
         // A card held up shows straight edges where its outline is, and its matches reach from
-        // the artwork into the name and text; the same artwork on a pack, a poster or a screen
-        // has neither. Either one missing weakens the sighting, both missing rule it out.
-        val spanF = if (h.ySpan < 0.4f) 0.35f else if (h.ySpan < 0.5f) 0.8f else 1f
-        val s = if (sides <= 1 && h.ySpan < 0.4f) 0f else kpStrength(score, margin, h.inliers, h.spread) * SIDE_FACTOR[sides] * spanF
+        // the artwork into the name and text. The same artwork on a pack, a poster or a book has
+        // neither: matches only in the artwork don't count (if a hand hides the text, the
+        // outline path still sees the card), and few edges weaken the sighting, since a
+        // low-contrast card can hide them.
+        val ruledOut = h.ySpan < 0.4f || (sides == 0 && h.ySpan < 0.6f)
+        val spanF = if (h.ySpan < 0.5f) 0.8f else 1f
+        val s = if (ruledOut) 0f else kpStrength(score, margin, h.inliers, h.spread) * SIDE_FACTOR[sides] * spanF
         return Sighting(h.key, score, margin, h.inliers, s, quad, cands, "kp", sides, h.ySpan) to canon
     }
 }
@@ -179,7 +182,10 @@ object Guide {
     const val SHOW = 0.2f
 
     fun holds(q: Quad, w: Int, h: Int): Boolean =
-        q.cx in 0.18f * w..0.82f * w && q.cy in 0.18f * h..0.82f * h && q.area > 0.06f * w * h
+        q.cx in 0.18f * w..0.82f * w && q.cy in 0.18f * h..0.82f * h && q.area > 0.06f * w * h &&
+            // a picture of a card filling the whole background (a playmat, a poster on the
+            // wall) is bigger than a card held up to the camera, even one held at an angle
+            q.area < 0.93f * w * h
 
     /** The sighting the scanner shows and reads: the strongest one held in the guide. */
     fun main(a: Analysis, w: Int, h: Int): Sighting? = a.sightings.firstOrNull { it.strength >= SHOW && holds(it.quad, w, h) }
@@ -196,6 +202,9 @@ class Tracker(
     var minSightings: Int = 2,
     var halfLife: Double = 0.5,
     var gap: Double = 0.9,
+    /** A locked card that's unrecognised keeps its lock this long at most while something
+     *  card-shaped stays in view (glare, blur; not a binder page sitting there for ever). */
+    var holdMax: Double = 5.0,
 ) {
     private class Ev(var value: Float, var count: Int, var last: Double)
 
@@ -203,6 +212,7 @@ class Tracker(
     private var lastTime = -1.0
     var locked: String? = null; private set
     private var lockedSeen = 0.0
+    private var lockedSighted = 0.0
 
     /** Feed one frame's sightings (key to strength). Returns a newly confirmed key, or null. */
     fun update(now: Double, sightings: Map<String, Float>, cardInView: Boolean): String? {
@@ -223,16 +233,20 @@ class Tracker(
         }
         val lk = locked
         if (lk != null) {
-            if (sightings.containsKey(lk) || (cardInView && sightings.values.none { it > 0.3f })) lockedSeen = now
+            if (sightings.containsKey(lk)) { lockedSeen = now; lockedSighted = now }
+            else if (cardInView && now - lockedSighted < holdMax && sightings.values.none { it > 0.3f }) lockedSeen = now
             if (now - lockedSeen > gap) unlock()
         }
-        val best = ev.entries.filter { it.value.value >= threshold && it.value.count >= minSightings }
+        // Only a card seen just now: evidence fades slowly, so a card that was held for a while
+        // still has plenty of it after it has gone
+        val best = ev.entries.filter { it.value.value >= threshold && it.value.count >= minSightings && now - it.value.last < 0.3 }
             .maxByOrNull { it.value.value } ?: return null
         if (best.key == locked) return null
         // A locked card is only replaced by a clearly stronger different card.
         if (locked != null && best.value.value < 1.5f * (ev[locked!!]?.value ?: 0f)) return null
         locked = best.key
         lockedSeen = now
+        lockedSighted = now
         ev.keys.retainAll(setOf(best.key))
         return best.key
     }
@@ -242,6 +256,7 @@ class Tracker(
         .maxByOrNull { it.value.value }?.let { it.key to (it.value.value / threshold).coerceIn(0f, 1f) }
 
     fun unlock() {
+        locked?.let { ev.remove(it) }
         locked = null
     }
 

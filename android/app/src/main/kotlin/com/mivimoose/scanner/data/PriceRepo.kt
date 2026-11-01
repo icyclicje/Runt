@@ -59,6 +59,7 @@ class PriceRepo(
 ) {
     private val histMem = ConcurrentHashMap<String, Pair<Long, List<PricePoint>>>()
     private val gradedMem = ConcurrentHashMap<String, GradedInfo>()
+    private val gemTried: MutableSet<String> = ConcurrentHashMap.newKeySet()
     private val pcLock = Mutex()
     private var lastPc = 0L
     private val _live = MutableStateFlow(LiveState(0L, false, ""))
@@ -82,7 +83,7 @@ class PriceRepo(
 
     /** The live quote behind a card's price for one printing, if there is one. */
     fun quote(card: Card, variant: String): LivePrice.Quote? {
-        val l = lives[card.key] ?: return null
+        val l = lives[card.key]?.takeIf { fresh(it.at) } ?: return null
         return when (variant) {
             "reverse" -> l.reverse
             card.variants().first().id -> l.main
@@ -90,32 +91,39 @@ class PriceRepo(
         }
     }
 
-    fun packQuote(setId: String): LivePrice.Quote? = packLives[setId]?.first
+    fun packQuote(setId: String): LivePrice.Quote? = packLives[setId]?.takeIf { fresh(it.second) }?.first
+
+    /** Live prices count for a day; after that the daily prices are the newer ones. */
+    private fun fresh(at: Long) = System.currentTimeMillis() - at < 24 * 3600_000L
 
     /** One product's live quotes per printing name, from its latest sales and cheapest listings. */
-    private fun quotes(productId: Long, holoMain: Boolean, wantReverse: Boolean, sealed: Boolean = false): Map<String, LivePrice.Quote>? {
+    private fun quotes(
+        productId: Long, holoMain: Boolean, wantReverse: Boolean, japanese: Boolean, reverseMarket: Double? = null,
+        condition: String = "Near Mint", single: Boolean = false,
+    ): Map<String, LivePrice.Quote>? {
         val pts = runCatching { tcg.pricePoints(productId) }.getOrNull()
-        val sales = runCatching { tcg.latestSales(productId) }.getOrNull()
+        val sales = runCatching { tcg.latestSales(productId, japanese = japanese) }.getOrNull()
         if (pts == null && sales == null) return null
         val all = ArrayList(sales ?: emptyList())
         // the newest five sales can all be one printing: ask for reverse holos separately
-        if (wantReverse && all.count { it.variant == "Reverse Holofoil" } < 3) runCatching { tcg.latestSales(productId, listOf(77)) }.getOrNull()?.let { all += it }
-        val lows = runCatching { tcg.lowestListings(productId, if (sealed) "Unopened" else "Near Mint") }.getOrNull() ?: emptyMap()
+        if (wantReverse && all.count { it.variant == "Reverse Holofoil" } < 3) runCatching { tcg.latestSales(productId, listOf(77), japanese) }.getOrNull()?.let { all += it }
+        val lows = runCatching { tcg.lowestListings(productId, condition, japanese) }.getOrNull() ?: emptyMap()
         val since = java.time.LocalDate.now().minusDays(30).toString()
-        val cond = if (sealed) "Unopened" else "Near Mint"
         // the two requests can return the same sale: one per exact time
-        val recent = all.filter { it.day >= since && it.condition.equals(cond, true) }.distinctBy { "${it.time}|${it.variant}|${it.price}" }
+        val recent = all.filter { it.day >= since && it.condition.equals(condition, true) }.distinctBy { "${it.time}|${it.variant}|${it.price}" }
         val normal = pts?.firstOrNull { it.printing.equals("Normal", true) }?.market
         val foil = pts?.firstOrNull { it.printing.equals("Foil", true) }?.market
         val out = LinkedHashMap<String, LivePrice.Quote>()
-        // TCGplayer's "Foil" market price is the holo of a holo card, else the reverse holo
-        for ((name, market) in listOf("Normal" to normal, "Holofoil" to foil.takeIf { holoMain }, "Reverse Holofoil" to foil.takeIf { !holoMain })) {
+        // TCGplayer's "Foil" market price is the holo of a holo card or a holo-only product
+        // (modern rares), else the reverse holo
+        for ((name, market) in listOf("Normal" to normal, "Holofoil" to foil.takeIf { holoMain || normal == null },
+            "Reverse Holofoil" to (foil.takeIf { !holoMain && normal != null } ?: reverseMarket))) {
             val names = PRINTINGS[name]!!
             val q = LivePrice.compute(market, recent.filter { it.variant in names }.map { it.price }, names.mapNotNull { lows[it] }.minOrNull())
             if (q != null) out[name] = q
         }
         // a single-printing product (a pattern card, a pack): everything it sold is that printing
-        if (out.isEmpty() || sealed) LivePrice.compute(normal ?: foil, recent.map { it.price }, lows.values.minOrNull())?.let { out["any"] = it }
+        if (out.isEmpty() || single) LivePrice.compute(normal ?: foil, recent.map { it.price }, lows.values.minOrNull())?.let { out["any"] = it }
         return out
     }
 
@@ -127,14 +135,17 @@ class PriceRepo(
         val variants = card.variants()
         val hasReverse = variants.any { it.id == "reverse" }
         val holoMain = variants.first().id == "holo"
-        val q = quotes(id, holoMain, hasReverse) ?: return@withContext false
+        val japanese = card.lang == "ja"
+        val q = quotes(id, holoMain, hasReverse, japanese, card.reversePrice.takeIf { card.reverseKnown && it > 0 }) ?: return@withContext false
         val main = (if (holoMain) q["Holofoil"] ?: q["Normal"] else q["Normal"] ?: q["Holofoil"]) ?: q["any"]
         val rev = if (hasReverse) q["Reverse Holofoil"] else null
         val extras = HashMap<String, LivePrice.Quote>()
-        for (v in card.extraVariants) v.productId?.let { pid -> quotes(pid, true, false)?.let { m -> (m["any"] ?: m.values.firstOrNull())?.let { extras[v.id] = it } } }
+        for (v in card.extraVariants) v.productId?.let { pid -> quotes(pid, true, false, japanese, single = true)?.let { m -> (m["any"] ?: m.values.firstOrNull())?.let { extras[v.id] = it } } }
         val live = Live(main, rev, extras, System.currentTimeMillis())
         lives[card.key] = live
         apply(card, live)
+        // the card data may have been re-read while this was being fetched
+        catalogs.catalog.value?.card(card.key)?.takeIf { it !== card }?.let { apply(it, live) }
         catalogs.tickPrices()
         saveLiveSoon()
         true
@@ -144,9 +155,10 @@ class PriceRepo(
     suspend fun refreshPack(set: com.mivimoose.core.catalog.CardSet, maxAgeMs: Long = 30 * 60_000L): LivePrice.Quote? = withContext(Dispatchers.IO) {
         val pid = set.packProductId ?: return@withContext null
         packLives[set.id]?.let { (q, at) -> if (System.currentTimeMillis() - at < maxAgeMs) return@withContext q }
-        val q = quotes(pid, false, false, sealed = true)?.let { it["any"] ?: it["Normal"] } ?: return@withContext null
+        val q = quotes(pid, false, false, set.lang == "ja", condition = "Unopened", single = true)?.let { it["any"] ?: it["Normal"] } ?: return@withContext null
         packLives[set.id] = q to System.currentTimeMillis()
         set.sealedPrice = q.price
+        catalogs.catalog.value?.set(set.id)?.sealedPrice = q.price
         catalogs.tickPrices()
         saveLiveSoon()
         q
@@ -160,18 +172,20 @@ class PriceRepo(
 
     /** Live prices younger than a day win over the slower sources. */
     private fun reapply(c: Catalog) {
-        val fresh = System.currentTimeMillis() - 24 * 3600_000L
-        for ((k, l) in lives) if (l.at > fresh) c.card(k)?.let { apply(it, l) }
-        for ((id, p) in packLives) if (p.second > fresh) c.set(id)?.sealedPrice = p.first.price
+        for ((k, l) in lives) if (fresh(l.at)) c.card(k)?.let { apply(it, l) }
+        for ((id, p) in packLives) if (fresh(p.second)) c.set(id)?.sealedPrice = p.first.price
     }
 
-    @Volatile private var saveAt = 0L
+    private val savePending = java.util.concurrent.atomic.AtomicBoolean(false)
 
+    /** One write for a burst of updates, which includes all of them. */
     private fun saveLiveSoon() {
-        val now = System.currentTimeMillis()
-        if (now - saveAt < 30_000L) return
-        saveAt = now
-        scope.launch(Dispatchers.IO) { delay(2000); runCatching { store.cachePut("live-prices", writeLive()) } }
+        if (!savePending.compareAndSet(false, true)) return
+        scope.launch(Dispatchers.IO) {
+            delay(10_000)
+            savePending.set(false)
+            runCatching { store.cachePut("live-prices", writeLive()) }
+        }
     }
 
     private fun qJson(q: LivePrice.Quote) = JSONObject().put("p", q.price).put("b", q.basis).put("s", JSONArray(q.sales))
@@ -183,12 +197,12 @@ class PriceRepo(
 
     private fun writeLive(): String = JSONObject().apply {
         put("cards", JSONObject().apply {
-            for ((k, l) in lives) put(k, JSONObject().put("at", l.at).apply {
+            for ((k, l) in lives) if (fresh(l.at)) put(k, JSONObject().put("at", l.at).apply {
                 l.main?.let { put("main", qJson(it)) }; l.reverse?.let { put("rev", qJson(it)) }
                 put("x", JSONObject().apply { l.extras.forEach { (v, q) -> put(v, qJson(q)) } })
             })
         })
-        put("packs", JSONObject().apply { for ((id, p) in packLives) put(id, qJson(p.first).put("at", p.second)) })
+        put("packs", JSONObject().apply { for ((id, p) in packLives) if (fresh(p.second)) put(id, qJson(p.first).put("at", p.second)) })
     }.toString()
 
     private fun restoreLive() = scope.launch(Dispatchers.IO) {
@@ -279,9 +293,18 @@ class PriceRepo(
     /** PSA/CGC population and graded prices, cached for a week. */
     suspend fun graded(card: Card, variant: String, set: com.mivimoose.core.catalog.CardSet?): GradedInfo? = withContext(Dispatchers.IO) {
         val k = "${card.key}|$variant"
-        gradedMem[k]?.let { return@withContext it }
-        store.cacheGet("graded|$k", 7 * 24 * 3600_000L)?.let { parse(it) }?.let { gradedMem[k] = it; return@withContext it }
+        val key = prefs.value.gemRateKey.trim()
         val setWords = (set?.tcgName ?: card.setName).substringAfter(": ").replace(Regex("^(SV|SWSH|SM|XY|ME|BW)\\d*[a-z]?:?\\s*"), "")
+        fun allGraders() = if (key.isEmpty()) null else runCatching {
+            GemRate(http, key).find(set?.year, setWords, card.name, card.number, card.lang == "ja")
+        }.onFailure { Log.w(TAG, "gemrate ${card.key}", it) }.getOrNull()
+        val cached = gradedMem[k] ?: store.cacheGet("graded|$k", 7 * 24 * 3600_000L)?.let { parse(it) }?.also { gradedMem[k] = it }
+        if (cached != null) {
+            // a GemRate key entered since this was fetched: add its population, once per run
+            if (key.isEmpty() || cached.universal != null || !gemTried.add(k)) return@withContext cached
+            val u = allGraders() ?: return@withContext cached
+            return@withContext cached.copy(universal = u).also { gradedMem[k] = it; store.cachePut("graded|$k", write(it)) }
+        }
         val q = PriceCharting.query(setWords, card.lang, card.name, card.number, variant)
         val g = pcLock.withLock {
             val wait = 1100 - (System.currentTimeMillis() - lastPc)
@@ -295,15 +318,13 @@ class PriceRepo(
             }.onFailure { Log.w(TAG, "graded $q", it) }.getOrNull()
         }
         val varPid = card.variants().firstOrNull { it.id == variant }?.productId
-        val key = prefs.value.gemRateKey.trim()
-        val universal = if (key.isEmpty()) null else runCatching {
-            GemRate(http, key).find(set?.year, setWords, card.name, card.number, card.lang == "ja")
-        }.onFailure { Log.w(TAG, "gemrate ${card.key}", it) }.getOrNull()
+        val universal = allGraders()
         if (g == null && universal == null) return@withContext null
         val info = GradedInfo(g?.url ?: universal?.url ?: "", g?.psa?.toList(), g?.cgc?.toList(), g?.prices ?: emptyMap(), g?.history ?: emptyMap(),
             exact = g?.tcgId != null && (g.tcgId == card.tcgId || g.tcgId == varPid), fetched = System.currentTimeMillis(), universal = universal)
         gradedMem[k] = info
-        store.cachePut("graded|$k", write(info))
+        // without PriceCharting's half, try again next time rather than keeping this for a week
+        if (g != null) store.cachePut("graded|$k", write(info))
         info
     }
 

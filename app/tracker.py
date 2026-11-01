@@ -44,8 +44,11 @@ class MultiTracker:
         if not keep_lock:
             self.locked.clear()
 
-    def update(self, dets, now: float, threshold: float, half_life: float, gap: float, min_sightings: int = 2):
-        """Feed one frame's detections. Returns [(key, Detection)] confirmed by this frame."""
+    def update(self, dets, now: float, threshold: float, half_life: float, gap: float, min_sightings: int = 2,
+               in_view=()):
+        """Feed one frame's detections. Returns [(key, Detection)] confirmed by this frame.
+        in_view: outlines of cards seen but not recognised this frame (glare, blur): a
+        locked card whose outline is still there stays locked, so it isn't scanned twice."""
         dt = 0.05 if self._t is None else max(0.0, min(1.0, now - self._t))
         self._t = now
         fade = math.exp(-math.log(2) * dt / max(0.05, half_life))
@@ -68,6 +71,10 @@ class MultiTracker:
                 tr.best = d
             if d.key in self.locked and d.strength > 0.15:
                 self.locked[d.key] = now                 # still in view
+        for k in self.locked:
+            tr = self.tracks.get(k)
+            if tr is not None and tr.quad is not None and any(_overlap(tr.quad, q) > 0.6 for q in in_view):
+                self.locked[k] = now                     # the same card, just not recognised right now
         for k, t in list(self.locked.items()):
             if now - t > gap:
                 del self.locked[k]                       # gone long enough: may be scanned again
@@ -80,7 +87,7 @@ class MultiTracker:
             self.locked[tr.key] = now
             confirmed.append((tr.key, tr.best))
             tr.evidence = 0.0
-        for k in [k for k, t in self.tracks.items() if now - t.last_seen > 3.0]:
+        for k in [k for k, t in self.tracks.items() if now - t.last_seen > 3.0 and k not in self.locked]:
             del self.tracks[k]
         return confirmed
 

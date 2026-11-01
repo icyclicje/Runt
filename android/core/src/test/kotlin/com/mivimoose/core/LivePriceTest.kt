@@ -25,6 +25,13 @@ class LivePriceTest {
     }
 
     @Test
+    fun shippingOnCheapCardsIsNotAPrice() {
+        assertEquals(null, LivePrice.compute(null, emptyList(), 1.3))
+        // sales of 35-40 cents, and a $1.63 listing that's nearly all shipping
+        assertEquals(0.4, LivePrice.compute(null, listOf(0.35, 0.4, 0.45), 1.63)!!.price, 0.001)
+    }
+
+    @Test
     fun fewSalesUseMarketCappedByListings() {
         assertEquals("listing", LivePrice.compute(50.0, listOf(48.0), 44.0)!!.basis)
         assertEquals(44.0, LivePrice.compute(50.0, listOf(48.0), 44.0)!!.price, 0.001)

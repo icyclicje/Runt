@@ -42,6 +42,8 @@ class RefRepo(ctx: Context, private val net: Net, private val scope: CoroutineSc
     private val dir = File(ctx.filesDir, "refs").apply { mkdirs() }
     private val mem = ConcurrentHashMap<String, RefCard>()
     private val setLoaded = ConcurrentHashMap<String, Boolean>()
+    private val loading: MutableSet<String> = ConcurrentHashMap.newKeySet()
+    private val attempts = ConcurrentHashMap<String, Int>()
     private val fileLock = Mutex()
     val index = CardIndex()
     private val poolSets = LinkedHashSet<String>()
@@ -59,7 +61,7 @@ class RefRepo(ctx: Context, private val net: Net, private val scope: CoroutineSc
     /** Make these sets (and extra single cards) the recognition pool. */
     fun setPool(catalog: Catalog, setIds: List<String>, extraKeys: Collection<String> = emptyList()) {
         synchronized(poolSets) {
-            if (poolSets.toList() == setIds && poolExtra.containsAll(extraKeys)) return
+            if (poolSets.toList() == setIds && poolExtra.containsAll(extraKeys) && setIds.all { setLoaded[it] == true }) return
             poolSets.clear(); poolSets += setIds
             poolExtra += extraKeys
             while (poolExtra.size > 120) poolExtra.remove(poolExtra.first())
@@ -85,6 +87,11 @@ class RefRepo(ctx: Context, private val net: Net, private val scope: CoroutineSc
         }.distinct()
         val refs = keys.mapNotNull { mem[it] }
         index.load(refs)
+        // Scanning a mixed binder loads set after set; they're on disk if they're needed again.
+        if (mem.size > MAX_IN_MEMORY) {
+            mem.keys.retainAll(keys.toHashSet())
+            setLoaded.keys.retainAll(poolSetIds.toSet())
+        }
         _poolVersion.value = _poolVersion.value + 1
         Log.i(TAG, "pool: ${refs.size} cards from ${poolSetIds}")
     }
@@ -94,6 +101,11 @@ class RefRepo(ctx: Context, private val net: Net, private val scope: CoroutineSc
     suspend fun ensureSet(catalog: Catalog, setId: String, partial: (() -> Unit)? = null) {
         if (setLoaded[setId] == true) return
         val set = catalog.set(setId) ?: return
+        if (!loading.add(setId)) return                  // already on its way
+        try { loadSet(set, setId, partial) } finally { loading.remove(setId) }
+    }
+
+    private suspend fun loadSet(set: com.mivimoose.core.catalog.CardSet, setId: String, partial: (() -> Unit)?) {
         val file = File(dir, "${setId.replace(Regex("[^A-Za-z0-9._-]"), "_")}.bin")
         fileLock.withLock { if (file.exists()) readFile(file) }
         // rare cards first: they're the ones worth scanning quickly
@@ -110,7 +122,9 @@ class RefRepo(ctx: Context, private val net: Net, private val scope: CoroutineSc
             fileLock.withLock { writeFile(file, set.cards.mapNotNull { mem[it.key] }) }
             _progress.value = null
         }
-        setLoaded[setId] = true
+        // downloads can fail on a bad connection: try again next time, but not for ever
+        val complete = set.cards.none { !it.noImage && !mem.containsKey(it.key) }
+        if (complete || attempts.merge(setId, 1, Int::plus)!! >= 3) setLoaded[setId] = true
     }
 
     private suspend fun <T> coroutineScopeIO(block: suspend CoroutineScope.() -> T): T = withContext(Dispatchers.IO) { block() }
@@ -194,13 +208,18 @@ class RefRepo(ctx: Context, private val net: Net, private val scope: CoroutineSc
 
     fun clear() {
         dir.listFiles()?.forEach { it.delete() }
-        mem.clear(); setLoaded.clear()
+        mem.clear(); setLoaded.clear(); attempts.clear()
+        synchronized(poolSets) { poolSets.clear(); poolExtra.clear() }
+        index.load(emptyList())
+        _poolVersion.value = _poolVersion.value + 1
     }
 
     fun diskBytes(): Long = dir.listFiles()?.sumOf { it.length() } ?: 0
 
     companion object {
         private const val TAG = "Refs"
+        /** Reference images kept in memory (about 70 KB each). */
+        private const val MAX_IN_MEMORY = 3000
         private const val VERSION = 3
     }
 }

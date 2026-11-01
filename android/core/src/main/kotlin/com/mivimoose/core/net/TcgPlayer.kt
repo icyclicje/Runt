@@ -64,8 +64,8 @@ class TcgPlayer(private val http: Http) {
     }
 
     /** The latest sales on TCGplayer (the newest five; `variants` [77] = reverse holo only). */
-    fun latestSales(productId: Long, variants: List<Int> = emptyList()): List<Sale> {
-        val body = JSONObject().put("conditions", JSONArray()).put("languages", JSONArray(listOf(1))).put("variants", JSONArray(variants))
+    fun latestSales(productId: Long, variants: List<Int> = emptyList(), japanese: Boolean = false): List<Sale> {
+        val body = JSONObject().put("conditions", JSONArray()).put("languages", JSONArray(listOf(if (japanese) 7 else 1))).put("variants", JSONArray(variants))
             .put("listingType", "All").put("limit", 25).put("offset", 0).toString()
         val o = JSONObject(http.post("https://mpapi.tcgplayer.com/v2/product/$productId/latestsales", body, BROWSER))
         val a = o.optJSONArray("data") ?: return emptyList()
@@ -78,8 +78,9 @@ class TcgPlayer(private val http: Http) {
 
     /** Cheapest listing right now per printing ("Normal", "Holofoil", "Reverse Holofoil"), price plus
      *  shipping, in one condition ("Near Mint"; sealed products are "Unopened"). */
-    fun lowestListings(productId: Long, condition: String = "Near Mint"): Map<String, Double> {
-        val body = """{"filters":{"term":{"sellerStatus":"Live","channelId":0,"language":["English"],"condition":["$condition"]},""" +
+    fun lowestListings(productId: Long, condition: String = "Near Mint", japanese: Boolean = false): Map<String, Double> {
+        val language = if (japanese) "Japanese" else "English"
+        val body = """{"filters":{"term":{"sellerStatus":"Live","channelId":0,"language":["$language"],"condition":["$condition"]},""" +
             """"range":{"quantity":{"gte":1}},"exclude":{"channelExclusion":0}},"from":0,"size":40,""" +
             """"sort":{"field":"price+shipping","order":"asc"},"context":{"shippingCountry":"US","cart":{}},"aggregations":["listingType"]}"""
         val o = JSONObject(http.post("https://mp-search-api.tcgplayer.com/v1/product/$productId/listings", body, BROWSER))

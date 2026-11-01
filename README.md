@@ -20,9 +20,10 @@ Hold a card inside the guide. There's no set or pack to pick: the scanner works 
 set from the first card it reads and loads all of that set, so the rest scan in a fraction
 of a second. The set it detected is shown at the top (tap it to choose one by hand).
 
-- **Collect:** new cards go into your collection. A card you already own is flagged
-  **DUPLICATE** (Settings decides whether it's added anyway, skipped or asked).
-- **Price check:** shows the price without adding anything.
+- **Collect** (the default, the setting *Add scanned cards to my collection automatically*):
+  every scan goes into your collection by itself, nothing to tap. A card you already own is
+  flagged **DUPLICATE** (Settings decides whether it's added anyway, skipped or asked).
+- **Price check:** shows the price without adding anything; the result has an Add button.
 - **Track packs** (Settings, off by default): each pack's cards and value are counted
   against the pack's price; the same card twice in one pack is ignored, and a full pack or
   a card from another set starts the next pack.
@@ -38,8 +39,14 @@ Master Ball, 1st Edition), its 30-day trend, its rarity, how far it moves your s
 and the **PSA population** (graded copies per grade, gem rate, PSA 10 and PSA 9 prices). Expensive cards get their own effects and sounds:
 a holo shimmer for hits, sparkles for big hits, and for a **jackpot** (default $100+) a
 full-screen burst with a gunshot (or explosion, cash register, air horn, laser, fanfare).
-Undo, "wrong card?" and the next card's printing are one tap away. The session's scans run
-along the bottom; all scans are in **Recent scans**.
+A card with more than one printing shows them on its result, and tapping one changes the
+copy that was just added; other cards don't ask. Undo and "wrong card?" are one tap away.
+The session's scans run along the bottom; all scans are in **Recent scans**.
+
+One physical card is one scan. Holding it, glare or a moment of blur doesn't scan it again,
+and neither does taking it away, leaving for its details and coming back while it's still
+there. A second copy of the same card scans once the first has been taken away (the guide
+empty for about a second).
 
 How it recognises cards:
 

@@ -90,7 +90,8 @@ class CardSet(
     val packSizeData: Int?,
     var estimated: Boolean,
 ) {
-    val cards = ArrayList<Card>()
+    /** Copy-on-write: cards can arrive from TCGplayer while the scanner is reading the set. */
+    val cards: MutableList<Card> = java.util.concurrent.CopyOnWriteArrayList()
     var sealedPrice: Double? = null
     /** TCGplayer product of the set's booster pack, for its live price. */
     var packProductId: Long? = null
@@ -119,10 +120,14 @@ class CardSet(
     val mainCount: Int get() = cards.count { it.mainSet }
 
     /** Cards in collector-number order: the main set by number, then subsets (TG, GG, SV...). */
-    val sortedCards: List<Card> by lazy {
+    private var sorted: List<Card>? = null
+
+    /** Cards in collector-number order (again whenever cards were added). */
+    val sortedCards: List<Card>
+        get() = sorted?.takeIf { it.size == cards.size } ?: run {
         cards.sortedWith(compareBy<Card>({ it.number.takeWhile { c -> !c.isDigit() }.isNotEmpty() }, { it.number.takeWhile { c -> !c.isDigit() } },
             { it.number.filter { c -> c.isDigit() }.toIntOrNull() ?: Int.MAX_VALUE }, { it.number }, { it.order }))
-    }
+        }.also { sorted = it }
     val isInternational get() = lang != "en"
     val displayName get() = name
 

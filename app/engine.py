@@ -303,7 +303,8 @@ class Engine:
                            use_keypoints=s['use_keypoints'], max_cards=s['max_cards'])
         threshold, min_sightings = SENSITIVITY.get(s['sensitivity'], SENSITIVITY['balanced'])
         now = time.time()
-        confirmed = self.tracker.update(dets, now, threshold, 0.5, s['rescan_gap'], min_sightings)
+        confirmed = self.tracker.update(dets, now, threshold, 0.5, s['rescan_gap'], min_sightings,
+                                        in_view=[q for q, _, _ in det.last_unknown])
         pend_key, pend_prog = self.tracker.pending(threshold)
         if pend_key and pend_key != getattr(self, '_last_pending', None) and s['snd_reading']                 and now - getattr(self, '_last_tick', 0) > 0.6:
             self.sounds.play('reading')                    # a new card has started being read

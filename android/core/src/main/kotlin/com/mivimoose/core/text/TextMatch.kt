@@ -37,6 +37,25 @@ object TextMatch {
     private val WORD_RE = Regex("[A-Za-z0-9-]{2,6}")
     private val NOISE = Regex("^(basic|stage ?[12]|evolves from.*|hp ?\\d+|\\d+ ?hp|v ?union|tera|ability|trainer|item|supporter|stadium|pokemon tool|energy|たね|1進化|2進化|進化)$", RegexOption.IGNORE_CASE)
 
+    /** The same lines as they sit on the card turned upside down (the reader reads rotated
+     *  text, so an upside-down card gives the right words in mirrored places). */
+    fun rotated(lines: List<OcrLine>): List<OcrLine> = lines.map { l ->
+        OcrLine(l.text, floatArrayOf(1f - l.box[2], 1f - l.box[3], 1f - l.box[0], 1f - l.box[1]))
+    }
+
+    /** Lines read off a rough crop around the guide, where the card can be any size: positions
+     *  relative to the text itself, whose first and last lines are where a card's are. */
+    fun fitted(lines: List<OcrLine>): List<OcrLine> {
+        if (lines.size < 2) return lines
+        val y0 = lines.minOf { it.box[1] }
+        val span = lines.maxOf { it.box[3] } - y0
+        if (span < 0.3f) return lines
+        return lines.map { l -> OcrLine(l.text, floatArrayOf(l.box[0], (l.box[1] - y0) / span, l.box[2], (l.box[3] - y0) / span)) }
+    }
+
+    /** Laid out like one card: one collector number (two with a promo's), along the bottom. */
+    fun cardLike(c: TextClues): Boolean = c.numbers.count { it.bottom } in 1..2 && c.numbers.distinctBy { it.number }.size <= 3
+
     fun clues(lines: List<OcrLine>): TextClues {
         val numbers = ArrayList<CollectorNumber>()
         val codes = LinkedHashSet<String>()

@@ -97,6 +97,9 @@ fun SettingsScreen(vm: AppVM, nav: NavHostController) {
             }
         }
         Section("Scanning") {
+            Toggle("Add scanned cards to my collection automatically", s.autoAdd) { v -> set { it.copy(autoAdd = v) } }
+            Text("Off: the scanner only checks prices, and each result has an Add button.", color = Vault.muted, fontSize = 12.sp)
+            Spacer(Modifier.height(10.dp))
             Toggle("Track packs", s.trackPacks) { v -> set { it.copy(trackPacks = v) } }
             Text("Counts each pack's cards and their value against the pack's price. The set is detected from the cards; " +
                 "a card from another set, or a full pack, starts the next pack.", color = Vault.muted, fontSize = 12.sp)

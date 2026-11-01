@@ -14,6 +14,7 @@ object LivePrice {
     /** Below this share of the typical sale, a sale or listing is an odd one out. */
     private const val LOW = 0.6
     private const val HIGH = 1.67
+    private const val MIN_LISTING = 3.0
 
     fun compute(market: Double?, sales: List<Double>, lowest: Double?): Quote? {
         val raw = sales.filter { it > 0 }
@@ -22,7 +23,8 @@ object LivePrice {
             val clean = raw.filter { it in LOW * m0..HIGH * m0 }
             if (clean.size >= 3) {
                 val m = median(clean)
-                val low = lowest?.takeIf { it >= LOW * m }
+                // far above the sales: mostly shipping on a cheap card, or a thin market
+                val low = lowest?.takeIf { it in LOW * m..HIGH * m }
                 return Quote(round2(median(clean + listOfNotNull(low))), "sales", clean, low, market)
             }
         }
@@ -31,7 +33,8 @@ object LivePrice {
             return if (low != null && low < market) Quote(round2(low), "listing", raw, low, market) else Quote(market, "market", raw, low, market)
         }
         if (raw.isNotEmpty()) return Quote(round2(median(raw)), "sales", raw, lowest, null)
-        return lowest?.let { Quote(round2(it), "listing", raw, it, null) }
+        // a cheap card's only listing is mostly shipping: say nothing rather than that
+        return lowest?.takeIf { it >= MIN_LISTING }?.let { Quote(round2(it), "listing", raw, it, null) }
     }
 
     fun median(xs: List<Double>): Double {

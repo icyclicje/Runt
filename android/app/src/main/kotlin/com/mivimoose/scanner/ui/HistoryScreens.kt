@@ -127,7 +127,7 @@ fun PacksScreen(vm: AppVM, nav: NavHostController) {
             }
         }
         if (packs.isEmpty()) item {
-            Empty(Icons.Default.Inventory2, "No packs yet", "Choose Pack in the scanner, pick the set, and scan each card as you open it. Each pack's value is tracked against its price.")
+            Empty(Icons.Default.Inventory2, "No packs yet", "Turn on Track packs in Settings and scan each card as you open it. The set is detected by itself, and each pack's value is tracked against its price.")
         }
         items(rows, key = { it.first.id }) { (pk, scans) ->
             val set = c.set(pk.setId)

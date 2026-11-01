@@ -313,7 +313,7 @@ fun GradedBody(g: GradedInfo, compact: Boolean = false) {
         }
         if (!compact) GradedHistory(g)
     }
-    Text((if (g.exact) "PriceCharting" else "PriceCharting (closest match)") + " · population updated monthly", color = Vault.muted, fontSize = 11.sp, modifier = Modifier.padding(top = 8.dp))
+    if (g.psa != null || g.prices.isNotEmpty()) Text((if (g.exact) "PriceCharting" else "PriceCharting (closest match)") + " · population updated monthly", color = Vault.muted, fontSize = 11.sp, modifier = Modifier.padding(top = 8.dp))
 }
 
 /** Population across graders (GemRate): copies and gem rate per grader, bars to scale. */

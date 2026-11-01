@@ -72,6 +72,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -125,14 +126,12 @@ fun ScanScreen(vm: AppVM, nav: NavHostController, testFrames: String?) {
     var burst by remember { mutableLongStateOf(0L) }
     var shakeSeed by remember { mutableLongStateOf(0L) }
     var torch by remember { mutableStateOf(false) }
-    var nextVariant by remember { mutableStateOf<String?>(null) }
-    val sessionStart = remember { System.currentTimeMillis() }
+    val sessionStart = ScanEngine.sessionStart
     val scans by vm.scans.collectAsState()
     val refProgress by Graph.refs.progress.collectAsState()
     LaunchedEffect(engine) {
         engine.results.collect { r ->
             result = r
-            nextVariant = null
             if (!r.ignored && r.tier == 3) { jackpot = r; shakeSeed = System.nanoTime() }
             else if (!r.ignored && r.tier == 2) { burst = System.nanoTime(); shakeSeed = System.nanoTime() }
         }
@@ -150,7 +149,7 @@ fun ScanScreen(vm: AppVM, nav: NavHostController, testFrames: String?) {
             Row(Modifier.fillMaxWidth().padding(horizontal = 8.dp), verticalAlignment = Alignment.CenterVertically) {
                 RoundIcon(Icons.AutoMirrored.Filled.ArrowBack, "Back") { nav.popBackStack() }
                 Spacer(Modifier.weight(1f))
-                ModeSwitch(settings.scanMode) { m -> Graph.prefs.update { it.copy(scanMode = m) }; Graph.sounds.play("click") }
+                ModeSwitch(if (settings.autoAdd) "collect" else "check") { m -> Graph.prefs.update { it.copy(autoAdd = m == "collect") }; Graph.sounds.play("click") }
                 Spacer(Modifier.weight(1f))
                 RoundIcon(if (torch) Icons.Default.FlashOn else Icons.Default.FlashOff, "Torch") { torch = !torch }
             }
@@ -158,7 +157,7 @@ fun ScanScreen(vm: AppVM, nav: NavHostController, testFrames: String?) {
             SetChip(setId, manual = settings.focusSetId != null, loading = refProgress?.takeIf { it.setId == setId },
                 language = settings.scanLanguage, onPick = { pickFocus = true },
                 onAuto = { Graph.prefs.update { it.copy(focusSetId = null) }; engine.autoSet() })
-            if (settings.trackPacks && settings.scanMode == "collect") PackBar(engine, result)
+            if (settings.trackPacks && settings.autoAdd) PackBar(engine)
             Spacer(Modifier.height(8.dp))
             HintPill(live, refProgress?.takeIf { it.setId != setId }?.let { "Loading ${cat?.set(it.setId)?.name ?: "set"} ${it.done}/${it.total}" })
         }
@@ -170,7 +169,6 @@ fun ScanScreen(vm: AppVM, nav: NavHostController, testFrames: String?) {
                         onClose = { result = null })
                 }
             }
-            NextPrinting(nextVariant) { v -> nextVariant = v; engine.nextVariant = v }
             val session = scans.filter { it.at >= sessionStart }
             SessionStrip(session.mapNotNull { s -> cat?.card(s.cardKey)?.let { it to s.price } }, nav)
         }
@@ -290,10 +288,11 @@ private fun HintPill(live: LiveScan, loading: String?) {
 
 /** The pack being opened (pack tracking on): its cards and value against its price. */
 @Composable
-private fun PackBar(engine: ScanEngine, last: ScanResult?) {
-    val (count, value, open) = remember(last) { engine.packState() }
-    val size = last?.packSize?.takeIf { it > 0 } ?: 10
-    val set = last?.card?.setId?.let { Graph.catalog.catalog.value?.set(it) }
+private fun PackBar(engine: ScanEngine) {
+    val info by engine.pack.collectAsState()
+    Graph.catalog.priceTick.collectAsState().value
+    val (open, _, count, size, value) = info
+    val set = info.setId?.let { Graph.catalog.catalog.value?.set(it) }
     val cost = set?.let { it.sealedPrice ?: Graph.catalog.packs.products(it).firstOrNull()?.price }
     Glass(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp), padding = PaddingValues(12.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
@@ -344,33 +343,13 @@ private fun SetChip(setId: String?, manual: Boolean, loading: com.mivimoose.scan
 }
 
 @Composable
-private fun NextPrinting(selected: String?, onSelect: (String?) -> Unit) {
-    val opts = listOf<Pair<String?, String>>(null to "Normal", "reverse" to "Reverse holo", "pokeball" to "Poké Ball", "masterball" to "Master Ball", "first" to "1st Edition")
-    var open by remember { mutableStateOf(false) }
-    Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 6.dp), horizontalArrangement = Arrangement.End) {
-        Box {
-            val on = selected != null
-            Row(Modifier.clip(RoundedCornerShape(50)).background(if (on) Vault.mint else Color.Black.copy(alpha = 0.5f))
-                .border(1.dp, if (on) Color.Transparent else Color.White.copy(alpha = 0.2f), RoundedCornerShape(50))
-                .clickable { Graph.sounds.play("click"); open = true }.padding(horizontal = 12.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
-                Text("NEXT CARD ", color = if (on) Vault.bg.copy(alpha = 0.7f) else Color.White.copy(alpha = 0.6f), fontSize = 10.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.sp)
-                Text((opts.firstOrNull { it.first == selected }?.second ?: "Normal") + " ▾", color = if (on) Vault.bg else Color.White, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
-            }
-            DropdownMenu(open, { open = false }) {
-                for ((v, label) in opts) DropdownMenuItem({ Text(label, fontWeight = if (v == selected) FontWeight.Bold else FontWeight.Normal) }, { onSelect(v); open = false })
-            }
-        }
-    }
-}
-
-@Composable
 private fun SessionStrip(items: List<Pair<Card, Double>>, nav: NavHostController) {
     Row(Modifier.fillMaxWidth().background(Brush.verticalGradient(listOf(Color.Transparent, Color.Black.copy(alpha = 0.75f)))).padding(start = 12.dp, end = 12.dp, top = 8.dp, bottom = 10.dp),
         verticalAlignment = Alignment.CenterVertically) {
         Column(Modifier.width(86.dp)) {
             Text("SESSION", color = Color.White.copy(alpha = 0.7f), fontSize = 10.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.sp)
             Text(Graph.money.fmt(items.sumOf { it.second }, cents = false), color = Color.White, fontWeight = FontWeight.Bold, fontSize = 18.sp)
-            Text("${items.size} cards", color = Color.White.copy(alpha = 0.7f), fontSize = 11.sp)
+            Text(if (items.size == 1) "1 card" else "${items.size} cards", color = Color.White.copy(alpha = 0.7f), fontSize = 11.sp)
         }
         LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             items(items.take(30)) { (c, price) ->
@@ -393,14 +372,12 @@ private fun ResultCard(r: ScanResult, engine: ScanEngine, nav: NavHostController
     var graded by remember(r.card.key, r.variant) { mutableStateOf(Graph.prices.cachedGraded(r.card, r.variant)) }
     var trend by remember(r.card.key, r.variant) { mutableStateOf<Double?>(null) }
     var showAlts by remember(r.scanId) { mutableStateOf(false) }
-    LaunchedEffect(r.card.key, r.variant) {
-        if (Graph.prices.refreshCard(r.card, maxAgeMs = 60_000L)) {
-            val live = r.card.priceFor(r.variant)
-            if (kotlin.math.abs(live - r.price) >= 0.01) {
-                if (r.scanId > 0) Graph.store.setScanVariant(r.scanId, r.variant, live)
-                onChange(r.copy(price = live))
-            }
-        }
+    // the scan as it is when the live price arrives (Add may have been tapped meanwhile)
+    val latest by rememberUpdatedState(r)
+    LaunchedEffect(r.scanId, r.card.key, r.variant) {
+        Graph.prices.refreshCard(r.card, maxAgeMs = 60_000L)
+        val live = latest.card.priceFor(latest.variant)
+        if (kotlin.math.abs(live - latest.price) >= 0.01) onChange(engine.reprice(latest, live))
         if (Graph.prefs.value.showGraded && graded == null) graded = Graph.prices.graded(r.card, r.variant, Graph.catalog.catalog.value?.set(r.card.setId))
         Graph.prices.history(r.card, r.variant, "month")?.let { h -> if (h.size >= 2 && h.first().price > 0) trend = (h.last().price - h.first().price) / h.first().price }
     }

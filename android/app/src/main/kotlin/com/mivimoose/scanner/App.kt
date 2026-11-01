@@ -21,6 +21,7 @@ import com.mivimoose.scanner.data.PriceRepo
 import com.mivimoose.scanner.data.RefRepo
 import com.mivimoose.scanner.data.Sounds
 import com.mivimoose.scanner.data.Store
+import kotlinx.coroutines.CoroutineExceptionHandler
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -38,7 +39,8 @@ object Graph {
     lateinit var prices: PriceRepo
     lateinit var money: Money
     lateinit var sounds: Sounds
-    val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+    /** A failed background job is logged; it doesn't take the app down. */
+    val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default + CoroutineExceptionHandler { _, e -> android.util.Log.e("App", "background", e) })
     var openCvReady = false
 }
 

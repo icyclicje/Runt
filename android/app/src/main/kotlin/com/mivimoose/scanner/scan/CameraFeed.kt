@@ -165,12 +165,12 @@ fun FileFeed(engine: ScanEngine, dir: String, modifier: Modifier = Modifier) {
  */
 private suspend fun bench(engine: ScanEngine, root: File, show: (Bitmap) -> Unit) {
     val prefs = com.mivimoose.scanner.Graph.prefs
-    val oldMode = prefs.value.scanMode
-    prefs.update { it.copy(scanMode = "check") }
+    val oldAuto = prefs.value.autoAdd
+    prefs.update { it.copy(autoAdd = false) }
     com.mivimoose.scanner.Graph.store.clearScans()
     engine.autoSet()
     val seqs = root.listFiles()!!.filter { File(it, "truth.json").exists() }.sortedBy { it.name }
-    var ok = 0; var wrong = 0; var n = 0
+    var ok = 0; var wrong = 0; var n = 0; var doubles = 0
     var negFrames = 0; var negShown = 0          // non-card objects outlined as a card
     val delays = ArrayList<Int>()
     for (d in seqs) {
@@ -205,12 +205,13 @@ private suspend fun bench(engine: ScanEngine, root: File, show: (Bitmap) -> Unit
         val mine = got.filter { it.first == key }
         val others = got.filter { it.first != key }
         if (mine.isNotEmpty()) { ok++; delays += mine.first().second }
+        if (mine.size > 1) doubles++
         wrong += others.size
         Log.i("BENCH", "${d.name} ${truth.getString("name")} #${truth.getString("number")}: " +
             (if (mine.isNotEmpty()) "ok +${mine.first().second}f" else "MISSED") + (if (others.isNotEmpty()) " FALSE ${others.map { it.first }}" else ""))
     }
     delays.sort()
-    Log.i("BENCH", "SUMMARY ${root.name}: scanned $ok/$n, false $wrong, median delay ${delays.getOrNull(delays.size / 2)} frames" +
+    Log.i("BENCH", "SUMMARY ${root.name}: scanned $ok/$n, false $wrong, double $doubles, median delay ${delays.getOrNull(delays.size / 2)} frames" +
         if (negFrames > 0) ", non-cards outlined in $negShown/$negFrames frames" else "")
-    prefs.update { it.copy(scanMode = oldMode) }
+    prefs.update { it.copy(autoAdd = oldAuto) }
 }

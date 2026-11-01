@@ -87,5 +87,19 @@ class CatalogTest {
             line("006/165 Charizard ex", 0.45f, 0.48f))), cat)
         println("checklist top: " + sheet.take(3).joinToString { "${it.card.key} %.2f (${it.why})".format(it.score) })
         assertTrue("a checklist isn't a card", (sheet.firstOrNull()?.score ?: 0f) < 0.7f)
+        val many = TextMatch.clues(listOf(line("025/165 Pikachu", 0.75f, 0.78f), line("006/165 Charizard ex", 0.80f, 0.83f), line("122/165 Mr. Mime", 0.85f, 0.88f),
+            line("150/165 Mewtwo", 0.90f, 0.93f)))
+        assertTrue("many numbers: not one card", !TextMatch.cardLike(many))
+
+        // An upside-down card: the reader gets the words, but the name at the bottom and the number at the top
+        val upside = listOf(line("221/S9I O", 0.02f, 0.04f), line("Mr. Mime", 0.92f, 0.97f), line("122/165", 0.03f, 0.05f))
+        val asRead = TextMatch.clues(upside)
+        val turned = TextMatch.clues(TextMatch.rotated(upside))
+        assertTrue(!TextMatch.cardLike(asRead) && TextMatch.cardLike(turned))
+        assertEquals("sv3pt5|122|Mr. Mime", TextMatch.candidates(turned, cat).first().card.key)
+
+        // A card smaller than the rough crop around the guide: its number isn't low in the picture
+        val small = listOf(line("Mr. Mime", 0.28f, 0.31f), line("Psypower", 0.45f, 0.48f), line("122/165", 0.66f, 0.68f))
+        assertTrue(!TextMatch.cardLike(TextMatch.clues(small)) && TextMatch.cardLike(TextMatch.clues(TextMatch.fitted(small))))
     }
 }

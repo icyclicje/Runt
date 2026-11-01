@@ -116,7 +116,10 @@ class CatalogRepo(private val ctx: Context, private val net: Net, private val tc
             runCatching {
                 var changed = net.fetchTo("$SITE/data/bundle.js", bundle)
                 changed = net.fetchTo("$SITE/data/pack-art.js", File(dir, "pack-art.js")) || changed
-                if (changed || _catalog.value == null) lock.withLock { publish(parseLocal()) }
+                if (changed || _catalog.value == null) lock.withLock {
+                    publish(parseLocal())
+                    setPricesAt.clear()                  // new card objects with the site's prices
+                }
             }.onFailure { Log.w(TAG, "site data", it) }
         }
         // TCGplayer's own daily prices for the newest sets (what gets opened and scanned most);

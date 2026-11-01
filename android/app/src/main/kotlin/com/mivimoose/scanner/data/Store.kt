@@ -143,6 +143,8 @@ class Store(ctx: Context) : SQLiteOpenHelper(ctx, "mivimoose.db", null, 1) {
     }
 
     fun finishPack(id: Long) { writableDatabase.execSQL("UPDATE packs SET done=1 WHERE id=?", arrayOf(id)); changed() }
+    fun reopenPack(id: Long) { writableDatabase.execSQL("UPDATE packs SET done=0 WHERE id=?", arrayOf(id)); changed() }
+    fun setPackCost(id: Long, cost: Double) { writableDatabase.execSQL("UPDATE packs SET cost=? WHERE id=?", arrayOf<Any>(cost, id)); changed() }
 
     fun packs(): List<PackRow> = readableDatabase.rawQuery("SELECT * FROM packs ORDER BY opened_at DESC", null).use { c ->
         c.map { PackRow(long("id"), str("set_id"), long("opened_at"), dblOrNull("cost"), int("done") == 1) }
