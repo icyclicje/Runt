@@ -25,6 +25,8 @@ data class Settings(
     val scanLanguage: String = "auto",
     val defaultCondition: String = "NM",
     val packSetId: String? = null,
+    /** Set chosen in the scanner for instant scans in any mode (null = automatic). */
+    val focusSetId: String? = null,
     val packCost: Double? = null,
     val showGraded: Boolean = true,
     val psaToken: String = "",
@@ -66,6 +68,7 @@ class Prefs(ctx: Context) {
             scanLanguage = j.optString("scanLanguage", d.scanLanguage),
             defaultCondition = j.optString("defaultCondition", d.defaultCondition),
             packSetId = j.optString("packSetId", "").ifEmpty { null },
+            focusSetId = j.optString("focusSetId", "").ifEmpty { null },
             packCost = if (j.has("packCost") && !j.isNull("packCost")) j.optDouble("packCost") else null,
             showGraded = j.optBoolean("showGraded", d.showGraded),
             psaToken = j.optString("psaToken", ""),
@@ -81,7 +84,7 @@ class Prefs(ctx: Context) {
         put("currency", s.currency); put("hitValue", s.hitValue); put("bigValue", s.bigValue); put("jackpotValue", s.jackpotValue)
         put("jackpotSound", s.jackpotSound); put("sounds", s.sounds); put("uiSounds", s.uiSounds); put("haptics", s.haptics)
         put("volume", s.volume.toDouble()); put("scanMode", s.scanMode); put("dupePolicy", s.dupePolicy)
-        put("scanLanguage", s.scanLanguage); put("defaultCondition", s.defaultCondition); put("packSetId", s.packSetId ?: "")
+        put("scanLanguage", s.scanLanguage); put("defaultCondition", s.defaultCondition); put("packSetId", s.packSetId ?: ""); put("focusSetId", s.focusSetId ?: "")
         put("packCost", s.packCost ?: JSONObject.NULL); put("showGraded", s.showGraded); put("psaToken", s.psaToken)
         put("ocr", s.ocr); put("refreshMinutes", s.refreshMinutes); put("reduceMotion", s.reduceMotion); put("onboarded", s.onboarded)
         put("cardLanguages", org.json.JSONArray(s.cardLanguages.toList()))

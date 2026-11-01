@@ -106,7 +106,8 @@ fun ScanScreen(vm: AppVM, nav: NavHostController, testFrames: String?) {
     val settings by vm.settings.collectAsState()
     val engine = remember { ScanEngine() }
     DisposableEffect(engine) { onDispose { engine.close() } }
-    LaunchedEffect(cat, settings.scanMode, settings.packSetId) { engine.updatePool() }
+    LaunchedEffect(cat, settings.scanMode, settings.packSetId, settings.focusSetId) { engine.updatePool() }
+    var pickFocus by remember { mutableStateOf(false) }
     val live by engine.live.collectAsState()
     var result by remember { mutableStateOf<ScanResult?>(null) }
     var jackpot by remember { mutableStateOf<ScanResult?>(null) }
@@ -161,6 +162,7 @@ fun ScanScreen(vm: AppVM, nav: NavHostController, testFrames: String?) {
                         onClose = { result = null })
                 }
             }
+            if (settings.scanMode != "pack") FocusSetChip(settings.focusSetId, onPick = { pickFocus = true }) { Graph.prefs.update { it.copy(focusSetId = null) } }
             NextPrinting(nextVariant) { v -> nextVariant = v; engine.nextVariant = v }
             val session = scans.filter { it.at >= sessionStart }
             SessionStrip(session.mapNotNull { s -> cat?.card(s.cardKey)?.let { it to s.price } }, nav)
@@ -168,6 +170,7 @@ fun ScanScreen(vm: AppVM, nav: NavHostController, testFrames: String?) {
         if (burst != 0L) Burst(burst, count = 70, sparkles = true)
         jackpot?.let { j -> JackpotOverlay(j.scanId + burst, Graph.money.fmt(j.price), j.card.name) { jackpot = null } }
     }
+    if (pickFocus) SetPicker(onPick = { id -> Graph.prefs.update { it.copy(focusSetId = id) }; Graph.sounds.play("select"); pickFocus = false }, onDismiss = { pickFocus = false })
     if (pickSet) SetPicker(onPick = { id ->
         val s = cat?.set(id)
         Graph.prefs.update { it.copy(packSetId = id, packCost = s?.sealedPrice ?: s?.let { x -> Graph.catalog.packs.products(x).first().price }, scanMode = "pack") }
@@ -269,6 +272,21 @@ private fun PackBar(engine: ScanEngine, setId: String?, last: ScanResult?, onPic
         }
         Spacer(Modifier.height(6.dp))
         SegmentBar(listOf(count.toDouble() to Vault.mint, (size - count).coerceAtLeast(0).toDouble() to Vault.surface3), height = 5.dp)
+    }
+}
+
+/** Which set the scanner keeps loaded: automatic (recent sets) or one you chose. */
+@Composable
+private fun FocusSetChip(setId: String?, onPick: () -> Unit, onClear: () -> Unit) {
+    val name = setId?.let { Graph.catalog.catalog.value?.set(it)?.name }
+    Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp), verticalAlignment = Alignment.CenterVertically) {
+        Row(Modifier.clip(RoundedCornerShape(50)).background(Color.Black.copy(alpha = 0.5f)).border(1.dp, Color.White.copy(alpha = 0.2f), RoundedCornerShape(50))
+            .clickable(onClick = onPick).padding(horizontal = 12.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+            Text("SET ", color = Color.White.copy(alpha = 0.7f), fontSize = 10.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.sp)
+            Text(name ?: "Auto ▾", color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        }
+        if (name != null) Icon(Icons.Default.Close, "Back to automatic", tint = Color.White, modifier = Modifier.padding(start = 6.dp).size(20.dp).clickable(onClick = onClear))
+        else Text("  pick one for instant scans", color = Color.White.copy(alpha = 0.6f), fontSize = 11.sp)
     }
 }
 

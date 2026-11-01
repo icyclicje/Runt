@@ -24,6 +24,10 @@ Hold a card inside the guide. It's recognised in a fraction of a second:
   its price, the same card twice in one pack is ignored, and the next pack starts by itself.
 - **Price check:** shows the price without adding anything.
 
+Tap **Set** in the scanner to choose the set you're about to open: it's loaded straight
+away, so even the first card scans instantly (otherwise the first card of a new set is found
+from its printed text, which takes a couple of seconds).
+
 Each result shows the TCGplayer price for the printing (normal, reverse holo, Poké Ball,
 Master Ball, 1st Edition), its 30-day trend, and the **PSA population** (graded copies per
 grade, gem rate, PSA 10 and PSA 9 prices). Expensive cards get their own effects and sounds:

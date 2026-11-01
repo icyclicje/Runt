@@ -102,6 +102,7 @@ class ScanEngine {
         val s = Graph.prefs.value
         val sets = LinkedHashSet<String>()
         if (s.scanMode == "pack") s.packSetId?.let { sets += it }
+        s.focusSetId?.let { sets += it }
         Graph.store.scans(60).mapNotNull { c.card(it.cardKey)?.setId }.distinct().take(if (sets.isEmpty()) 3 else 2).forEach { sets += it }
         Graph.refs.setPool(c, sets.toList())
     }
