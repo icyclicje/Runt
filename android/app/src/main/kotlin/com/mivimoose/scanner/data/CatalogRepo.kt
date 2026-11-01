@@ -96,8 +96,12 @@ class CatalogRepo(private val ctx: Context, private val net: Net, private val tc
         return Catalog(c.sets.values.toList(), c.updated)
     }
 
+    /** Puts the live prices back after slower sources (daily files, the site) wrote theirs. */
+    @Volatile var reapplyLive: ((Catalog) -> Unit)? = null
+
     private fun publish(c: Catalog) {
         packs.invalidate()
+        reapplyLive?.invoke(c)
         _catalog.value = c
         scope.launch(Dispatchers.Default) { c.warmSearch() }
         _status.value = "${c.sets.size} sets · ${"%,d".format(c.cardCount)} cards"
@@ -115,22 +119,15 @@ class CatalogRepo(private val ctx: Context, private val net: Net, private val tc
                 if (changed || _catalog.value == null) lock.withLock { publish(parseLocal()) }
             }.onFailure { Log.w(TAG, "site data", it) }
         }
-        runCatching { applySitePrices() }.onFailure { Log.w(TAG, "site prices", it) }
+        // TCGplayer's own daily prices for the newest sets (what gets opened and scanned most);
+        // the site's prices run well above what cards sell for, so TCGplayer's replace them
+        _catalog.value?.let { c ->
+            for (s in c.sets.values.filter { it.tcgGroupId != null && !it.firstEdition && it.lang in setOf("en", "ja") }.sortedByDescending { it.release }.take(12))
+                runCatching { refreshSet(s.id, 720) }
+        }
         if (imported.isEmpty()) runCatching { reloadImported() }.onFailure { Log.w(TAG, "imported sets", it) }
         runCatching { importNewSets() }.onFailure { Log.w(TAG, "new sets", it) }
         _catalog.value?.let { _status.value = "${it.sets.size} sets · ${"%,d".format(it.cardCount)} cards" }
-    }
-
-    /** The site server's newest market prices (TCGplayer product id -> USD). */
-    private fun applySitePrices() {
-        val c = _catalog.value ?: return
-        val o = JSONObject(net.get("$SITE/api/prices")).optJSONObject("prices") ?: return
-        var n = 0
-        for (k in o.keys()) {
-            val v = o.optDouble(k); if (v.isNaN()) continue
-            c.byTcgId[k.toLongOrNull() ?: continue]?.forEach { card -> if (!card.firstEdition) { card.price = v; card.priceKnown = true; n++ } }
-        }
-        if (n > 0) tickPrices()
     }
 
     fun tickPrices() { packs.invalidate(); _prices.value = _prices.value + 1; pricesUpdated = System.currentTimeMillis() }
@@ -151,6 +148,7 @@ class CatalogRepo(private val ctx: Context, private val net: Net, private val tc
         val prices = runCatching { tcg.prices(cat, gid) }.getOrNull() ?: return false
         setPricesAt[setId] = System.currentTimeMillis()
         Supplements.applyPrices(c, products, prices)
+        reapplyLive?.invoke(c)
         var added = 0
         if (products != null && s.lang == "en" && s.source != "tcgcsv") {
             val missing = Supplements.missingCards(s, products, prices)

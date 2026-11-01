@@ -10,7 +10,7 @@ import java.io.OutputStream
  * than parsing the site's 6.5 MB of JavaScript again on every start.
  */
 object CatalogCache {
-    private const val VERSION = 2
+    private const val VERSION = 3
 
     fun write(sets: Collection<CardSet>, updated: String, out: OutputStream) {
         DataOutputStream(out.buffered(1 shl 16)).use { o ->
@@ -21,7 +21,7 @@ object CatalogCache {
                 o.writeUTF(s.id); o.writeUTF(s.name); o.optStr(s.nameLocal); o.writeUTF(s.series); o.writeUTF(s.release)
                 o.writeInt(s.printed); o.optStr(s.logo); o.optStr(s.symbol); o.writeUTF(s.lang); o.optStr(s.source)
                 o.writeInt(s.packSizeData ?: -1); o.writeBoolean(s.estimated); o.writeDouble(s.sealedPrice ?: -1.0)
-                o.writeBoolean(s.firstEdition); o.optStr(s.baseId); o.writeBoolean(s.incomplete)
+                o.writeBoolean(s.firstEdition); o.optStr(s.baseId); o.writeBoolean(s.incomplete); o.writeLong(s.packProductId ?: -1L)
                 o.writeInt(s.cards.size)
                 for (c in s.cards) {
                     o.writeUTF(c.key); o.writeUTF(c.number); o.writeUTF(c.name); o.optStr(c.nameLocal); o.writeUTF(c.rarity)
@@ -48,7 +48,7 @@ object CatalogCache {
                     packSizeData = i.readInt().takeIf { it >= 0 }, estimated = i.readBoolean(),
                 )
                 s.sealedPrice = i.readDouble().takeIf { it >= 0 }
-                s.firstEdition = i.readBoolean(); s.baseId = i.optStr(); s.incomplete = i.readBoolean()
+                s.firstEdition = i.readBoolean(); s.baseId = i.optStr(); s.incomplete = i.readBoolean(); s.packProductId = i.readLong().takeIf { it > 0 }
                 repeat(i.readInt()) {
                     val key = i.readUTF(); val number = i.readUTF(); val name = i.readUTF(); val nameLocal = i.optStr(); val rarity = i.readUTF()
                     val kind = i.readUTF(); val subtypes = i.readUTF().split('|').filter { it.isNotEmpty() }; val price = i.readDouble()

@@ -23,6 +23,11 @@ class Outline(val quad: Quad, val score: Float)
 /** The frame's thin edge pixels, for snapping outlines found some other way onto real edges. */
 class EdgeMap(val pts: FloatArray, val scale: Float) {
     fun snap(q: Quad): Quad = if (pts.isEmpty()) q else CardFinder.refine(q.scaled(scale), pts).scaled(1f / scale)
+
+    /** How many of the quad's sides run along a straight edge in the frame (0..4). A card held
+     *  up shows its edges; its artwork on a pack, a poster or a screen doesn't have them where
+     *  the card's outline would be. */
+    fun sides(q: Quad): Int = if (pts.isEmpty()) 0 else CardFinder.sidesOnEdges(q.scaled(scale), pts)
 }
 
 /**
@@ -149,6 +154,24 @@ object CardFinder {
         val ratio = r.area / max(1f, q.area)
         if (ratio !in 0.75f..1.3f || abs(r.aspect - CARD_ASPECT) / CARD_ASPECT > 0.3f) return q
         return r
+    }
+
+    fun sidesOnEdges(q: Quad, pts: FloatArray): Int {
+        val size = sqrt(q.area)
+        val band = max(3f, 0.03f * size)
+        var n = 0
+        for (i in 0 until 4) {
+            val x0 = q.x(i); val y0 = q.y(i); val x1 = q.x((i + 1) % 4); val y1 = q.y((i + 1) % 4)
+            val l = fitSide(pts, x0, y0, x1, y1, band) ?: continue
+            val len = hypot(x1 - x0, y1 - y0)
+            val ux = (x1 - x0) / len; val uy = (y1 - y0) / len
+            // the line found must be the side itself: same direction, through its middle
+            if (abs(ux * l[3] - uy * l[2]) > 0.08f) continue
+            val mx = (x0 + x1) / 2 - l[0]; val my = (y0 + y1) / 2 - l[1]
+            if (abs(mx * l[3] - my * l[2]) > band) continue
+            n++
+        }
+        return n
     }
 
     /** A straight line along one side (point + unit direction), robustly fitted to the edge

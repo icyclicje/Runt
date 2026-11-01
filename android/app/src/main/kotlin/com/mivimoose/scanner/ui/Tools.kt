@@ -206,7 +206,8 @@ private fun String.num() = replace(",", ".").toDoubleOrNull() ?: 0.0
 @Composable
 private fun EvTool(set: CardSet, nav: NavHostController) {
     val pm = Graph.catalog.packs
-    LaunchedEffect(set.id) { Graph.catalog.refreshSet(set.id, 360) }
+    LaunchedEffect(set.id) { Graph.catalog.refreshSet(set.id, 360); Graph.prices.refreshPack(set) }
+    Graph.catalog.priceTick.collectAsState().value
     val ev = pm.expectedValue(set)
     val prods = pm.products(set)
     val packPrice = set.sealedPrice ?: prods.first().price
@@ -215,7 +216,13 @@ private fun EvTool(set: CardSet, nav: NavHostController) {
         Text("AVERAGE VALUE OF ONE PACK", style = Eyebrow)
         Text(Graph.money.fmt(ev), style = MaterialTheme.typography.displaySmall)
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Text("Pack price ${Graph.money.fmt(packPrice)}" + if (set.sealedPrice != null) " (market)" else " (estimated)", color = Vault.text2, fontSize = 13.sp)
+            val pq = Graph.prices.packQuote(set.id)
+            Text("Pack price ${Graph.money.fmt(packPrice)}" + when {
+                pq != null && pq.basis == "sales" -> " (live: last ${pq.sales.size} sales)"
+                pq != null -> " (live: cheapest for sale)"
+                set.sealedPrice != null -> " (market)"
+                else -> " (estimated)"
+            }, color = Vault.text2, fontSize = 13.sp)
             Spacer(Modifier.width(8.dp)); Delta(ev / packPrice - 1, small = true)
         }
         Text(if (ev >= packPrice) "On average, packs are worth more than they cost." else "On average you get back %.0f%% of what a pack costs.".format(ev / packPrice * 100), color = Vault.muted, fontSize = 12.sp)

@@ -7,6 +7,7 @@ import com.mivimoose.core.catalog.Catalog
 import com.mivimoose.core.text.TextCandidate
 import com.mivimoose.core.text.TextMatch
 import com.mivimoose.core.vision.Fingerprint
+import com.mivimoose.core.vision.Guide
 import com.mivimoose.core.vision.Quad
 import com.mivimoose.core.vision.Recognizer
 import com.mivimoose.core.vision.Tracker
@@ -27,7 +28,8 @@ import java.util.concurrent.atomic.AtomicBoolean
 
 /** What the camera overlay shows, updated every analysed frame. */
 data class LiveScan(
-    /** Main card outline as fractions of the analysed frame, or null. */
+    /** Outline of the card being scanned as fractions of the analysed frame; null until
+     *  something in the guide is known to be a card (not just card-shaped). */
     val quad: FloatArray? = null,
     val frameW: Int = 0,
     val frameH: Int = 0,
@@ -77,6 +79,8 @@ class ScanEngine {
     private var ocrScript = "en"
     @Volatile private var textCands: List<TextCandidate> = emptyList()
     @Volatile private var textAt = 0L
+    /** The last text read was laid out like a card (a collector number along the bottom). */
+    @Volatile private var textCardLike = false
 
     private val _live = MutableStateFlow(LiveScan())
     val live: StateFlow<LiveScan> = _live
@@ -89,6 +93,11 @@ class ScanEngine {
     private var packId: Long? = null
     private val packKeys = ArrayList<String>()
     private var packValue = 0.0
+    private var packSet: String? = null
+
+    /** The set being scanned: chosen by hand in the scanner, else detected from the cards. */
+    private val _set = MutableStateFlow<String?>(null)
+    val set: StateFlow<String?> = _set
 
     init {
         tracker.threshold = 1.5f
@@ -96,16 +105,30 @@ class ScanEngine {
         updatePool()
     }
 
-    /** Recognition pool: the pack's set, plus the sets of recent scans. */
+    /** Recognition pool: the set being scanned (all of it), plus the sets of recent scans. */
     fun updatePool() {
         val c = Graph.catalog.catalog.value ?: return
         val s = Graph.prefs.value
+        val recent = Graph.store.scans(60).mapNotNull { c.card(it.cardKey)?.setId }.distinct()
+        _set.value = s.focusSetId ?: _set.value ?: recent.firstOrNull()
         val sets = LinkedHashSet<String>()
-        if (s.scanMode == "pack") s.packSetId?.let { sets += it }
-        s.focusSetId?.let { sets += it }
-        Graph.store.scans(60).mapNotNull { c.card(it.cardKey)?.setId }.distinct().take(if (sets.isEmpty()) 3 else 2).forEach { sets += it }
+        _set.value?.let { sets += it }
+        recent.take(2).forEach { sets += it }
         Graph.refs.setPool(c, sets.toList())
     }
+
+    /** The cards come from this set: load all of it, so the rest scan instantly. */
+    private fun detect(setId: String) {
+        if (Graph.prefs.value.focusSetId != null || _set.value == setId) return
+        _set.value = setId
+        Log.i(TAG, "set detected: $setId")
+        updatePool()
+        // its pack's live price, for pack tracking
+        Graph.catalog.catalog.value?.set(setId)?.let { s -> scope.launch { Graph.catalog.refreshSet(s.id, 360); Graph.prices.refreshPack(s) } }
+    }
+
+    /** Back to detecting the set from the cards (after one was chosen by hand). */
+    fun autoSet() { _set.value = null; updatePool() }
 
     /** One portrait greyscale frame. Runs on the camera's analysis thread. */
     fun onFrame(gray: Mat, t: Double) {
@@ -115,13 +138,17 @@ class ScanEngine {
         val w = gray.cols(); val h = gray.rows()
         val sightings = HashMap<String, Float>()
         // Only the card held in the guide counts, not cards lying around it on the table.
-        for (s in a.sightings) if (s.strength > 0f && inGuide(s.quad, w, h)) sightings[s.key] = maxOf(sightings[s.key] ?: 0f, s.strength)
+        for (s in a.sightings) if (s.strength > 0f && Guide.holds(s.quad, w, h)) sightings[s.key] = maxOf(sightings[s.key] ?: 0f, s.strength)
 
         // Card text: when there's a card but vision isn't sure (or the pool doesn't have it).
-        val quad = a.sightings.firstOrNull { it.strength > 0f && inGuide(it.quad, w, h) }?.quad
-            ?: a.outlines.firstOrNull { inGuide(it.quad, w, h) }?.quad
+        val quad = a.sightings.firstOrNull { it.strength > 0f && Guide.holds(it.quad, w, h) }?.quad
+            ?: a.outlines.firstOrNull { Guide.holds(it.quad, w, h) }?.quad
         val visualSure = a.sightings.firstOrNull()?.let { it.strength >= 0.55f } ?: false
         val now = System.currentTimeMillis()
+        // What's outlined on screen: only something known to be a card (recognised by sight,
+        // or its printed text just read as a card's), never any card-shaped object.
+        val textStrong = textCardLike && now - textAt < 1200 && (textCands.firstOrNull()?.score ?: 0f) >= 0.7f
+        val shown = Guide.main(a, w, h)?.quad ?: quad?.takeIf { textStrong }
         // No outline (card filling the frame, corners cut off, low contrast): read the guide box,
         // where the scanner asks you to hold the card.
         val textQuad = quad?.takeIf { it.area > 0.06f * w * h } ?: Quad.guide(w, h, 0.72f)
@@ -132,7 +159,7 @@ class ScanEngine {
             scope.launch { try { readText(bmp, c) } finally { bmp.recycle(); ocrBusy.set(false) } }
         }
         // Recent strong text reads count as sightings too.
-        if (now - textAt < 1200) textCands.firstOrNull()?.let { tc ->
+        if (textCardLike && now - textAt < 1200) textCands.firstOrNull()?.let { tc ->
             val second = textCands.getOrNull(1)?.score ?: 0f
             if (tc.score >= 0.7f && tc.score - second >= 0.08f) {
                 val st = ((tc.score - 0.55f) * 2f).coerceIn(0.3f, 0.95f)
@@ -142,28 +169,23 @@ class ScanEngine {
         val confirmed = tracker.update(t, sightings, quad != null)
         val prog = tracker.progress()
         val hint = when {
-            quad == null -> "Show a card to the camera"
-            quad.area < 0.12f * w * h -> "Move closer"
+            shown == null -> ""
+            shown.area < 0.12f * w * h -> "Move closer"
             a.glare > 0.08f -> "Glare: tilt the card a little"
             a.sharpness in 1f..40f -> "Hold steady"
-            ocrBusy.get() && !visualSure -> "Reading the card…"
-            Graph.refs.index.size == 0 -> "Reading the card…"
             else -> ""
         }
         _live.value = LiveScan(
-            quad = quad?.let { q -> FloatArray(8) { if (it % 2 == 0) q.p[it] / w else q.p[it] / h } },
+            quad = shown?.let { q -> FloatArray(8) { if (it % 2 == 0) q.p[it] / w else q.p[it] / h } },
             frameW = w, frameH = h,
             state = if (tracker.locked != null && sightings.containsKey(tracker.locked)) "locked" else if (prog != null) "reading" else "searching",
             progress = prog?.second ?: 0f, hint = hint, leading = prog?.first?.let { c.card(it)?.name },
-            reading = textCands.firstOrNull()?.takeIf { now - textAt < 2000 }?.let { "#${it.card.number} ${it.card.name}" },
+            reading = textCands.firstOrNull()?.takeIf { textCardLike && now - textAt < 2000 && it.score >= 0.6f }?.let { "#${it.card.number} ${it.card.name}" },
             pool = Graph.refs.index.size, ms = a.millis,
         )
         if (confirmed != null) confirm(c, resolveReprint(c, confirmed), a.sightings.firstOrNull()?.cands?.mapNotNull { c.card(it.key) } ?: emptyList(),
             if (a.sightings.any { it.key == confirmed }) "vision" else "text")
     }
-
-    private fun inGuide(q: Quad, w: Int, h: Int): Boolean =
-        q.cx in 0.18f * w..0.82f * w && q.cy in 0.18f * h..0.82f * h && q.area > 0.06f * w * h
 
     /** The card straightened at high resolution for the text reader. */
     private fun cardBitmap(gray: Mat, q: Quad): Bitmap {
@@ -207,8 +229,11 @@ class ScanEngine {
         Log.i(TAG, "text[$script] numbers=${clues.numbers.map { it.number + "/" + it.total }} names=${clues.names.take(3)} " +
             "codes=${clues.codes.take(8)} -> ${cands.take(3).map { it.card.key + " %.2f".format(it.score) }}")
         if (cands.isEmpty()) return
+        textCardLike = clues.numbers.any { it.bottom }
         textCands = cands
         textAt = System.currentTimeMillis()
+        // The printed text names the set before the card is certain: start loading it now
+        if (textCardLike && cands.first().score >= 0.6f) detect(cands.first().card.setId)
         // Let vision double-check the likely cards (more of them when the text was weak)
         // only in the leading card's language: a same-art print in another language would compete
         val n = if (cands.first().score >= 0.7f) 3 else 8
@@ -245,10 +270,16 @@ class ScanEngine {
         var added = false
         var ignored = false
         var packCount = 0; var packSize = 0; var done = false
-        if (mode == "pack") {
-            val set = s.packSetId?.let { c.set(it) }
+        val inPack = s.trackPacks && mode == "collect"
+        if (inPack) {
+            // a card from another set means a new pack
+            if (packId != null && packSet != card.setId) nextPack(quiet = true)
+            val set = c.set(card.setId)
             packSize = set?.let { Graph.catalog.packs.packSize(it) } ?: 10
-            if (packId == null) { packId = store.openPack(s.packSetId ?: card.setId, s.packCost); packKeys.clear(); packValue = 0.0 }
+            if (packId == null) {
+                packId = store.openPack(card.setId, set?.let { it.sealedPrice ?: Graph.catalog.packs.products(it).firstOrNull()?.price })
+                packSet = card.setId; packKeys.clear(); packValue = 0.0
+            }
             if (key in packKeys) ignored = true else { packKeys += key; packValue += price }
             packCount = packKeys.size
             done = packCount >= packSize
@@ -257,13 +288,14 @@ class ScanEngine {
             val addIt = owned == 0 || s.dupePolicy == "warn"
             if (addIt) { store.add(key, variant, s.defaultCondition); added = true }
         }
-        val scanId = if (ignored) -1 else store.addScan(key, variant, price, mode, packId, owned > 0, added)
+        val scanId = if (ignored) -1 else store.addScan(key, variant, price, if (inPack) "pack" else mode, packId, owned > 0, added)
         if (done) { packId?.let { store.finishPack(it) }; packId = null; packKeys.clear() }
-        val r = ScanResult(scanId, card, variant, price, tier, owned, added, mode, ignored, packCount, packSize, packValue, done,
+        val r = ScanResult(scanId, card, variant, price, tier, owned, added, if (inPack) "pack" else mode, ignored, packCount, packSize, packValue, done,
             cands.filter { it.key != key }.distinctBy { it.key }.take(4), via)
         if (done) packValue = 0.0
         feedback(r)
         _results.tryEmit(r)
+        detect(card.setId)
         if (via == "text" || card.setId !in Graph.refs.poolSetIds) updatePool()
     }
 
@@ -314,13 +346,16 @@ class ScanEngine {
         return r.copy(added = true)
     }
 
-    fun nextPack() { packId?.let { Graph.store.finishPack(it) }; packId = null; packKeys.clear(); packValue = 0.0; Graph.sounds.play("deal") }
+    fun nextPack(quiet: Boolean = false) {
+        packId?.let { Graph.store.finishPack(it) }; packId = null; packKeys.clear(); packValue = 0.0
+        if (!quiet) Graph.sounds.play("deal")
+    }
     fun packState() = Triple(packKeys.size, packValue, packId != null)
 
     fun rescan() { tracker.reset() }
 
     /** Forget the current card and text reads (between benchmark sequences). */
-    fun resetForBench() { tracker.reset(); textCands = emptyList(); textAt = 0L; lastName = ""; lastAt = 0L }
+    fun resetForBench() { tracker.reset(); textCands = emptyList(); textAt = 0L; textCardLike = false; lastName = ""; lastAt = 0L }
 
     fun close() { scope.cancel(); ocr.close() }
 

@@ -81,5 +81,11 @@ class CatalogTest {
         val cj = TextMatch.candidates(jp, cat)
         println("jp top: " + cj.take(3).joinToString { "${it.card.key} %.2f (${it.why})".format(it.score) })
         assertEquals("ja-SV2a", cj.first().card.setId)
+
+        // A checklist on paper: names and numbers, but not laid out like a card
+        val sheet = TextMatch.candidates(TextMatch.clues(listOf(line("Pikachu", 0.12f, 0.15f), line("025/165 Pikachu  Common", 0.40f, 0.43f),
+            line("006/165 Charizard ex", 0.45f, 0.48f))), cat)
+        println("checklist top: " + sheet.take(3).joinToString { "${it.card.key} %.2f (${it.why})".format(it.score) })
+        assertTrue("a checklist isn't a card", (sheet.firstOrNull()?.score ?: 0f) < 0.7f)
     }
 }

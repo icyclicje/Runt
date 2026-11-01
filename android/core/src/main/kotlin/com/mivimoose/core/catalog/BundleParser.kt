@@ -79,7 +79,10 @@ object BundleParser {
             for ((fn, raw) in calls(packArt)) {
                 if (fn != "setPackArt") continue
                 val o = try { JSONObject(raw) } catch (e: Exception) { continue }
-                for (s in sets.values) o.optJSONObject(s.id)?.let { s.sealedPrice = sealedPrice(it) }
+                for (s in sets.values) o.optJSONObject(s.id)?.let { a ->
+                    s.sealedPrice = sealedPrice(a)
+                    s.packProductId = a.optJSONArray("p")?.optLong(0)?.takeIf { it > 0 }
+                }
             }
         }
         return Catalog(sets.values.toList(), updated)

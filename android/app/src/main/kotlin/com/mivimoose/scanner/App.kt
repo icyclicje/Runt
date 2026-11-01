@@ -55,7 +55,7 @@ class App : Application(), SingletonImageLoader.Factory {
         Graph.catalog = CatalogRepo(this, net, tcg, Graph.scope)
         Graph.refs = RefRepo(this, net, Graph.scope)
         Graph.money = Money(this, net).also { it.currency = Graph.prefs.value.currency }
-        Graph.prices = PriceRepo(tcg, PriceCharting(net), Graph.store, Graph.catalog, Graph.prefs, Graph.scope)
+        Graph.prices = PriceRepo(tcg, PriceCharting(net), net, Graph.store, Graph.catalog, Graph.prefs, Graph.scope)
         Graph.sounds = Sounds(this, Graph.prefs)
         Notifier.init(this, Graph.money)
         Graph.catalog.start()

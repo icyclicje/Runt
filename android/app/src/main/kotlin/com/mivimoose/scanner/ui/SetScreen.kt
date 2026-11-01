@@ -118,7 +118,9 @@ fun SetScreen(vm: AppVM, nav: NavHostController, setId: String) {
                         val ev = packs.expectedValue(set)
                         val pack = packs.products(set).first()
                         Column(Modifier.weight(1f)) { Text("PACK VALUE", style = Eyebrow); Text(Graph.money.fmt(ev), fontWeight = FontWeight.SemiBold) }
-                        Column(Modifier.weight(1f)) { Text("PACK PRICE", style = Eyebrow); Text(Graph.money.fmt(set.sealedPrice ?: pack.price), fontWeight = FontWeight.SemiBold) }
+                        LaunchedEffect(set.id) { Graph.prices.refreshPack(set) }
+                        Graph.catalog.priceTick.collectAsState().value
+                        Column(Modifier.weight(1f)) { Text(if (Graph.prices.packQuote(set.id) != null) "PACK · LIVE" else "PACK PRICE", style = Eyebrow); Text(Graph.money.fmt(set.sealedPrice ?: pack.price), fontWeight = FontWeight.SemiBold) }
                         Column(Modifier.weight(1f)) { Text("HIT ≥ $20", style = Eyebrow); Text("%.0f%%".format(packs.hitChance(set, 20.0) * 100), fontWeight = FontWeight.SemiBold) }
                     }
                 }

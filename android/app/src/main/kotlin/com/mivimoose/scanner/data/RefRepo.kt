@@ -65,8 +65,8 @@ class RefRepo(ctx: Context, private val net: Net, private val scope: CoroutineSc
             while (poolExtra.size > 120) poolExtra.remove(poolExtra.first())
         }
         scope.launch(Dispatchers.IO) {
-            for (s in setIds) ensureSet(catalog, s)
-            rebuild(catalog)
+            rebuild(catalog)                                 // what's already in memory, right away
+            for (s in setIds) if (setLoaded[s] != true) { ensureSet(catalog, s) { rebuild(catalog) }; rebuild(catalog) }
         }
     }
 
@@ -89,18 +89,23 @@ class RefRepo(ctx: Context, private val net: Net, private val scope: CoroutineSc
         Log.i(TAG, "pool: ${refs.size} cards from ${poolSetIds}")
     }
 
-    /** Download (or read from disk) every card of a set. */
-    suspend fun ensureSet(catalog: Catalog, setId: String) {
+    /** Download (or read from disk) every card of a set; `partial` runs after each batch, so
+     *  the cards already downloaded can be recognised while the rest still load. */
+    suspend fun ensureSet(catalog: Catalog, setId: String, partial: (() -> Unit)? = null) {
         if (setLoaded[setId] == true) return
         val set = catalog.set(setId) ?: return
         val file = File(dir, "${setId.replace(Regex("[^A-Za-z0-9._-]"), "_")}.bin")
         fileLock.withLock { if (file.exists()) readFile(file) }
-        val todo = set.cards.filter { !it.noImage && !mem.containsKey(it.key) }
+        // rare cards first: they're the ones worth scanning quickly
+        val todo = set.cards.filter { !it.noImage && !mem.containsKey(it.key) }.sortedByDescending { it.price }
         if (todo.isNotEmpty()) {
             var done = set.cards.size - todo.size
             _progress.value = Progress(setId, done, set.cards.size)
             coroutineScopeIO {
-                todo.map { c -> async { load(c, save = false); done++; _progress.value = Progress(setId, done, set.cards.size) } }.awaitAll()
+                for (batch in todo.chunked(40)) {
+                    batch.map { c -> async { load(c, save = false); done++; _progress.value = Progress(setId, done, set.cards.size) } }.awaitAll()
+                    partial?.invoke()
+                }
             }
             fileLock.withLock { writeFile(file, set.cards.mapNotNull { mem[it.key] }) }
             _progress.value = null

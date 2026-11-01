@@ -171,6 +171,23 @@ fun Price(usd: Double?, modifier: Modifier = Modifier, style: TextStyle = Materi
 private fun <T> kotlinx.coroutines.flow.StateFlow<T>.collectAsStateValue(): T = collectAsState().value
 
 /** Signed change with an arrow (never colour alone). */
+/** Where a card's price comes from: its latest sales and cheapest listing (live), or
+ *  TCGplayer's market price. */
+@Composable
+fun PriceBasis(card: com.mivimoose.core.catalog.Card, variant: String, modifier: Modifier = Modifier) {
+    Graph.catalog.priceTick.collectAsState().value
+    val q = Graph.prices.quote(card, variant)
+    val m = Graph.money
+    val text = when {
+        q == null -> if (card.priceKnown) "TCGplayer market price" else "Estimated (no recent sales)"
+        q.basis == "sales" -> "Live · last ${q.sales.size} sales " + (if (q.sales.size > 1) "${m.fmt(q.sales.min())}–${m.fmt(q.sales.max())}" else m.fmt(q.sales.first())) +
+            (q.lowest?.let { " · cheapest now ${m.fmt(it)}" } ?: "")
+        q.basis == "listing" -> "Live · cheapest copy for sale" + (q.market?.let { " (TCGplayer market ${m.fmt(it)})" } ?: "")
+        else -> "TCGplayer market price · few recent sales"
+    }
+    Text(text, color = Vault.muted, fontSize = 12.sp, modifier = modifier, maxLines = 2)
+}
+
 @Composable
 fun Delta(pct: Double?, modifier: Modifier = Modifier, small: Boolean = false) {
     if (pct == null || pct.isNaN() || pct.isInfinite()) return

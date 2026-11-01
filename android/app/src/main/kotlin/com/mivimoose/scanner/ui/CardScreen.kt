@@ -87,7 +87,7 @@ fun CardScreen(vm: AppVM, nav: NavHostController, key: String) {
     val ctx = LocalContext.current
     var variant by rememberSaveable(key) { mutableStateOf(card.variants().first().id) }
     var refreshing by remember { mutableStateOf(false) }
-    LaunchedEffect(key) { refreshing = true; Graph.prices.refreshCard(card); refreshing = false }
+    LaunchedEffect(key) { refreshing = true; Graph.prices.refreshCard(card); refreshing = false; Graph.catalog.refreshSet(card.setId, 720) }
     val price = card.priceFor(variant)
     val tier = tierOf(price)
     val ownedHere = p?.holdings?.filter { it.card.key == key } ?: emptyList()
@@ -130,10 +130,8 @@ fun CardScreen(vm: AppVM, nav: NavHostController, key: String) {
                 Spacer(Modifier.width(10.dp))
                 if (refreshing) CircularProgressIndicator(Modifier.size(16.dp).padding(bottom = 10.dp), strokeWidth = 2.dp, color = Vault.muted)
             }
-            Text(
-                (if (card.priceKnown) "TCGplayer market price" else "Estimated (no recent sales)") + (if (card.lang == "ja" && card.tcgId == null) " · Japanese print" else ""),
-                color = Vault.muted, fontSize = 12.sp,
-            )
+            PriceBasis(card, variant)
+            if (card.lang == "ja" && card.tcgId == null) Text("Japanese print: estimated from the English card", color = Vault.muted, fontSize = 12.sp)
             Spacer(Modifier.height(14.dp))
             MarketGraph(card, variant)
             Spacer(Modifier.height(14.dp))
@@ -298,7 +296,8 @@ fun GradedBody(g: GradedInfo, compact: Boolean = false) {
                 fmtValue = { "%,d".format(it.toInt()) }, tooltipLabel = { "PSA ${it + 1}" })
             Text("Grade", color = Vault.muted, fontSize = 11.sp, modifier = Modifier.fillMaxWidth(), textAlign = androidx.compose.ui.text.style.TextAlign.Center)
         }
-    } else Text("No PSA population recorded yet.", color = Vault.muted, fontSize = 13.sp, modifier = Modifier.padding(vertical = 8.dp))
+    } else if (g.universal == null) Text("No PSA population recorded yet.", color = Vault.muted, fontSize = 13.sp, modifier = Modifier.padding(vertical = 8.dp))
+    g.universal?.let { AllGraders(it, compact) }
     if (g.prices.isNotEmpty()) {
         Spacer(Modifier.height(12.dp))
         Text("GRADED PRICES", style = Eyebrow)
@@ -315,6 +314,37 @@ fun GradedBody(g: GradedInfo, compact: Boolean = false) {
         if (!compact) GradedHistory(g)
     }
     Text((if (g.exact) "PriceCharting" else "PriceCharting (closest match)") + " · population updated monthly", color = Vault.muted, fontSize = 11.sp, modifier = Modifier.padding(top = 8.dp))
+}
+
+/** Population across graders (GemRate): copies and gem rate per grader, bars to scale. */
+@Composable
+private fun AllGraders(u: com.mivimoose.core.net.GemRate.Pop, compact: Boolean) {
+    Spacer(Modifier.height(12.dp))
+    Row(verticalAlignment = Alignment.Bottom) {
+        Text("ALL GRADERS", style = Eyebrow, modifier = Modifier.weight(1f))
+        Text("%,d graded".format(u.total) + (u.gemRate?.let { " · %.1f%% gem".format(it * 100) } ?: ""), color = Vault.text2, fontSize = 12.sp)
+    }
+    Spacer(Modifier.height(6.dp))
+    val names = mapOf("psa" to "PSA", "cgc" to "CGC", "beckett" to "Beckett", "sgc" to "SGC")
+    val max = u.graders.values.maxOfOrNull { it.total }?.coerceAtLeast(1) ?: 1
+    for ((k, gp) in u.graders.entries.sortedByDescending { it.value.total }) {
+        if (gp.total == 0) continue
+        Row(Modifier.fillMaxWidth().padding(vertical = 3.dp), verticalAlignment = Alignment.CenterVertically) {
+            Text(names[k] ?: k.uppercase(), fontSize = 13.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.width(64.dp))
+            Box(Modifier.weight(1f).height(8.dp).clip(RoundedCornerShape(4.dp)).background(Vault.surface3)) {
+                Box(Modifier.fillMaxWidth(gp.total.toFloat() / max).height(8.dp).clip(RoundedCornerShape(4.dp)).background(Vault.series1))
+            }
+            Text("%,d".format(gp.total), fontSize = 12.sp, modifier = Modifier.width(64.dp), textAlign = androidx.compose.ui.text.style.TextAlign.End)
+            Text(gp.gemRate?.let { "%.0f%%".format(it * 100) } ?: "–", color = Vault.text2, fontSize = 12.sp, modifier = Modifier.width(44.dp),
+                textAlign = androidx.compose.ui.text.style.TextAlign.End)
+        }
+        if (!compact) {
+            val top = gp.grades.entries.sortedByDescending { it.key.substringBefore(' ').toDoubleOrNull() ?: 0.0 }.take(4)
+            if (top.isNotEmpty()) Text(top.joinToString("  ·  ") { "${it.key}: %,d".format(it.value) }, color = Vault.muted, fontSize = 11.sp,
+                modifier = Modifier.padding(start = 64.dp, bottom = 2.dp))
+        }
+    }
+    Text("GemRate · gem = PSA 10, BGS 9.5+, SGC 10, CGC 10", color = Vault.muted, fontSize = 11.sp, modifier = Modifier.padding(top = 4.dp))
 }
 
 @Composable

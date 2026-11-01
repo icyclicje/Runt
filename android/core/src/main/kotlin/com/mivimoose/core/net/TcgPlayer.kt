@@ -8,7 +8,8 @@ import org.json.JSONObject
  *  - tcgcsv.com: TCGplayer's whole catalog and market prices, refreshed daily (one file
  *    per set), for prices across a collection and for sets/cards the site doesn't have yet.
  *  - TCGplayer's own product endpoints (what tcgplayer.com's product pages load): the
- *    current market price per printing, and sales history for market graphs.
+ *    current market price per printing, the latest sales, the cheapest listings, and sales
+ *    history for market graphs.
  */
 class TcgPlayer(private val http: Http) {
     class Group(val id: Long, val name: String, val abbreviation: String, val supplemental: Boolean, val published: String, val category: Int)
@@ -20,6 +21,8 @@ class TcgPlayer(private val http: Http) {
     }
     class Price(val productId: Long, val subType: String, val market: Double?, val low: Double?, val mid: Double?, val high: Double?)
     class PricePoint(val printing: String, val market: Double?, val listedMedian: Double?)
+    /** One sale: day (yyyy-mm-dd) and exact time, variant ("Normal", "Holofoil", "Reverse Holofoil"...), condition. */
+    class Sale(val day: String, val variant: String, val condition: String, val price: Double, val shipping: Double, val quantity: Int, val time: String = day)
     class Bucket(val date: String, val market: Double, val sold: Int, val low: Double?, val high: Double?)
     class Series(val variant: String, val condition: String, val language: String, val buckets: List<Bucket>,
                  val avgDailySold: Double, val totalSold: Int)
@@ -58,6 +61,37 @@ class TcgPlayer(private val http: Http) {
         return (0 until a.length()).map { a.getJSONObject(it) }.map {
             PricePoint(it.optString("printingType"), it.dbl("marketPrice"), it.dbl("listedMedianPrice"))
         }
+    }
+
+    /** The latest sales on TCGplayer (the newest five; `variants` [77] = reverse holo only). */
+    fun latestSales(productId: Long, variants: List<Int> = emptyList()): List<Sale> {
+        val body = JSONObject().put("conditions", JSONArray()).put("languages", JSONArray(listOf(1))).put("variants", JSONArray(variants))
+            .put("listingType", "All").put("limit", 25).put("offset", 0).toString()
+        val o = JSONObject(http.post("https://mpapi.tcgplayer.com/v2/product/$productId/latestsales", body, BROWSER))
+        val a = o.optJSONArray("data") ?: return emptyList()
+        return (0 until a.length()).map { a.getJSONObject(it) }.mapNotNull { s ->
+            val p = s.dbl("purchasePrice") ?: return@mapNotNull null
+            val at = s.optString("orderDate")
+            Sale(at.take(10), s.optString("variant"), s.optString("condition"), p, s.dbl("shippingPrice") ?: 0.0, s.optInt("quantity", 1), at)
+        }
+    }
+
+    /** Cheapest listing right now per printing ("Normal", "Holofoil", "Reverse Holofoil"), price plus
+     *  shipping, in one condition ("Near Mint"; sealed products are "Unopened"). */
+    fun lowestListings(productId: Long, condition: String = "Near Mint"): Map<String, Double> {
+        val body = """{"filters":{"term":{"sellerStatus":"Live","channelId":0,"language":["English"],"condition":["$condition"]},""" +
+            """"range":{"quantity":{"gte":1}},"exclude":{"channelExclusion":0}},"from":0,"size":40,""" +
+            """"sort":{"field":"price+shipping","order":"asc"},"context":{"shippingCountry":"US","cart":{}},"aggregations":["listingType"]}"""
+        val o = JSONObject(http.post("https://mp-search-api.tcgplayer.com/v1/product/$productId/listings", body, BROWSER))
+        val a = o.optJSONArray("results")?.optJSONObject(0)?.optJSONArray("results") ?: return emptyMap()
+        val out = LinkedHashMap<String, Double>()
+        for (i in 0 until a.length()) {
+            val l = a.getJSONObject(i)
+            val total = (l.dbl("price") ?: continue) + (l.dbl("shippingPrice") ?: 0.0)
+            val k = l.optString("printing")
+            if (total < (out[k] ?: Double.MAX_VALUE)) out[k] = total
+        }
+        return out
     }
 
     /** Sales history per variant/condition. range: month, quarter, semi-annual, annual. */

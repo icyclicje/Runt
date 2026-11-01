@@ -16,21 +16,26 @@ refreshes it from the site in the background.
 
 ### Scanning
 
-Hold a card inside the guide. It's recognised in a fraction of a second:
+Hold a card inside the guide. There's no set or pack to pick: the scanner works out the
+set from the first card it reads and loads all of that set, so the rest scan in a fraction
+of a second. The set it detected is shown at the top (tap it to choose one by hand).
 
 - **Collect:** new cards go into your collection. A card you already own is flagged
   **DUPLICATE** (Settings decides whether it's added anyway, skipped or asked).
-- **Pack:** pick the set you're opening; each pack's cards and value are tracked against
-  its price, the same card twice in one pack is ignored, and the next pack starts by itself.
 - **Price check:** shows the price without adding anything.
+- **Track packs** (Settings, off by default): each pack's cards and value are counted
+  against the pack's price; the same card twice in one pack is ignored, and a full pack or
+  a card from another set starts the next pack.
 
-Tap **Set** in the scanner to choose the set you're about to open: it's loaded straight
-away, so even the first card scans instantly (otherwise the first card of a new set is found
-from its printed text, which takes a couple of seconds).
+Only cards are outlined and scanned. Something card-shaped (a phone, a book, a sheet of
+paper) gets no outline, and card artwork that isn't on a card (a booster pack, a poster, a
+binder page photo) isn't scanned: a card has to show its straight edges where the
+artwork says they should be, and printed text only counts when it's laid out like a card's
+(name at the top, collector number at the bottom).
 
-Each result shows the TCGplayer price for the printing (normal, reverse holo, Poké Ball,
-Master Ball, 1st Edition), its 30-day trend, and the **PSA population** (graded copies per
-grade, gem rate, PSA 10 and PSA 9 prices). Expensive cards get their own effects and sounds:
+Each result shows the live price for the printing (normal, reverse holo, Poké Ball,
+Master Ball, 1st Edition), its 30-day trend, its rarity, how far it moves your set along,
+and the **PSA population** (graded copies per grade, gem rate, PSA 10 and PSA 9 prices). Expensive cards get their own effects and sounds:
 a holo shimmer for hits, sparkles for big hits, and for a **jackpot** (default $100+) a
 full-screen burst with a gunshot (or explosion, cash register, air horn, laser, fanfare).
 Undo, "wrong card?" and the next card's printing are one tap away. The session's scans run
@@ -38,14 +43,15 @@ along the bottom; all scans are in **Recent scans**.
 
 How it recognises cards:
 
-1. **Artwork:** the card's keypoints are matched against the sets you're opening or
-   scanned recently (fast, works without visible edges, in sleeves and at angles).
+1. **Artwork:** the card's keypoints are matched against the set being scanned and the
+   sets scanned recently (fast, works in sleeves and at angles), then checked against the
+   card's edges.
 2. **Outline:** the card's edges are found, it's straightened and fingerprinted.
 3. **Printed text:** the collector number, set code (e.g. `MEW 199/165`, `SV2a`) and name
    are read on the phone (ML Kit; nothing is uploaded), so any of the 67,000+ cards can be
    found before its set is loaded. One misread character is tolerated. The card's scan is
-   then downloaded and checked by sight, and its set is loaded so the rest of the pack
-   scans instantly.
+   then downloaded and checked by sight. As soon as the text names a set, the whole set
+   starts loading (most valuable cards first), so the rest of the pack scans instantly.
 
 English, Japanese, Korean, Chinese (traditional and simplified), Thai and Indonesian
 cards are in the database; the text reader switches to Japanese by itself.
@@ -69,19 +75,29 @@ cards are in the database; the text reader switches to Japanese by itself.
 - **Share picture:** an image of your collection, top pulls, set progress, a single card
   or your last pack, to share or save.
 - **Settings:** currency (16), refresh interval, value tiers, sounds and jackpot sound,
-  duplicate handling, card condition, text reading, reduce motion, CSV export.
+  pack tracking, duplicate handling, card condition, text reading, GemRate key, reduce
+  motion, CSV export.
 
 ### Where the data comes from
 
 | What | Source |
 |---|---|
 | Sets and cards | the MivimooseRips site (refreshed every 12 h), plus TCGplayer's catalog via tcgcsv.com for sets and cards the site doesn't have yet (e.g. ME06 Delta Reign) |
-| Prices | TCGplayer market prices: the site's live prices, daily per-set prices (tcgcsv.com) and each card's live price on TCGplayer; every 15 min while open, every 6 h in the background |
+| Prices | **Live from TCGplayer:** each card's latest sales and the cheapest near-mint copy for sale right now, for every printing (see below); for cards without recent sales, TCGplayer's market price capped by the cheapest listing. Everything else uses TCGplayer's daily prices (tcgcsv.com): the newest sets, the sets you collect, and a set as soon as the scanner detects it. (The site's own prices ran up to a third above what cards sell for, e.g. $861 for a Mega Gengar ex selling at $644, so the app no longer uses them.) Every 15 min while open, every 6 h in the background |
+| Pack prices | Live from TCGplayer: the booster pack's latest sales and cheapest sealed listing |
 | Poké Ball and Master Ball patterns | separate TCGplayer products, attached to their cards |
 | Market graphs | TCGplayer sales history |
 | PSA and CGC population, graded prices | PriceCharting (personal use; cached a week per card) |
+| Population across PSA, CGC, Beckett and SGC (optional) | GemRate's API, with a GemRate key in Settings |
 | Pull rates | TCGplayer and community opening studies for 85 sets (51 English including Sun & Moon and Sword & Shield, 34 Japanese); each set shows its source, sample size and confidence |
 | Exchange rates | open.er-api.com |
+
+**Why live prices:** TCGplayer's "market price" is only recalculated now and then, so it trails a
+moving market. On 1 Nov 2026 Pikachu ex 277/217 showed a market price of $272 while its last
+five sales were $229-239 and the cheapest copy was $229; a 151 booster pack showed $29 in the
+old data and sold for about $26.70. A card's price is now the middle of its last five
+near-mint sales (from the past 30 days) and the cheapest near-mint listing, with odd ones
+out (mislisted, damaged, fake) dropped. Each price says what it's based on.
 
 Pull rates corrected against the site's model include Temporal Forces Hyper Rare (1 in
 139, not 188), Ascended Heroes Mega Attack Rare (1 in 29, not 300) and Crown Zenith

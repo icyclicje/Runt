@@ -92,6 +92,8 @@ class CardSet(
 ) {
     val cards = ArrayList<Card>()
     var sealedPrice: Double? = null
+    /** TCGplayer product of the set's booster pack, for its live price. */
+    var packProductId: Long? = null
     var firstEdition = false
     var baseId: String? = null
     /** TCGplayer group id (tcgcsv), when known. */

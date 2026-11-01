@@ -17,6 +17,10 @@ class Sighting(
     val cands: List<Match>,
     /** "kp" (found by its artwork keypoints) or "edge" (by its outline). */
     val source: String,
+    /** Sides of the outline that lie on straight edges in the frame (0..4). */
+    val sides: Int = 4,
+    /** Share of the card's height its matched keypoints span (keypoint sightings). */
+    val ySpan: Float = 1f,
 )
 
 class Analysis(
@@ -112,8 +116,10 @@ class Recognizer(val index: CardIndex) {
                     for ((m, inl) in fp.verify(canon, cands, 3)) {
                         val other = cands.filter { it.key != m.key }.maxOfOrNull { it.score }
                         val margin = if (other != null) m.score - other else 0.5f
-                        val s = edgeStrength(m.score, margin, inl)
-                        if (best == null || s > best.strength) best = Sighting(m.key, m.score, margin, inl, s, o.quad, cands, "edge")
+                        // a close call between two cards on few matches is how card-like pictures
+                        // (a playmat, a poster) get mistaken for a card: not enough to go on
+                        val s = if (margin < 0.06f && inl < 30) 0f else edgeStrength(m.score, margin, inl)
+                        if (best == null || s > best.strength) best = Sighting(m.key, m.score, margin, inl, s, o.quad, cands, "edge", edgeMap?.sides(o.quad) ?: 4)
                     }
                     best?.let { sightings += it }
                 } finally {
@@ -136,6 +142,11 @@ class Recognizer(val index: CardIndex) {
     /** A keypoint hit, double-checked against its card's fingerprint and scored. The corners
      *  projected from keypoints can drift a little, so the outline snapped onto the card's
      *  real edges is tried too and the better match kept. Returns the canon for measuring. */
+    private companion object {
+        /** Keypoint sighting strength by how many of its outline's sides lie on edges (0..4). */
+        val SIDE_FACTOR = floatArrayOf(0f, 0.5f, 0.85f, 1f, 1f)
+    }
+
     private fun kpSighting(gray: Mat, h: KpHit, edgeMap: EdgeMap?): Pair<Sighting, Mat>? {
         val fp = index.fingerprints
         var quad = h.quad
@@ -152,9 +163,26 @@ class Recognizer(val index: CardIndex) {
         val cands = fp.match(rows, 5)
         val other = cands.filter { it.key != h.key }.maxOfOrNull { it.score }
         val margin = if (other != null) score - other else 0.5f
-        val s = kpStrength(score, margin, h.inliers, h.spread)
-        return Sighting(h.key, score, margin, h.inliers, s, quad, cands, "kp") to canon
+        val sides = edgeMap?.sides(quad) ?: 4
+        // A card held up shows straight edges where its outline is, and its matches reach from
+        // the artwork into the name and text; the same artwork on a pack, a poster or a screen
+        // has neither. Either one missing weakens the sighting, both missing rule it out.
+        val spanF = if (h.ySpan < 0.4f) 0.35f else if (h.ySpan < 0.5f) 0.8f else 1f
+        val s = if (sides <= 1 && h.ySpan < 0.4f) 0f else kpStrength(score, margin, h.inliers, h.spread) * SIDE_FACTOR[sides] * spanF
+        return Sighting(h.key, score, margin, h.inliers, s, quad, cands, "kp", sides, h.ySpan) to canon
     }
+}
+
+/** The phone scanner's guide: only a card held there counts, not cards lying around it. */
+object Guide {
+    /** Strength from which a sighting is shown on screen as "this card". */
+    const val SHOW = 0.2f
+
+    fun holds(q: Quad, w: Int, h: Int): Boolean =
+        q.cx in 0.18f * w..0.82f * w && q.cy in 0.18f * h..0.82f * h && q.area > 0.06f * w * h
+
+    /** The sighting the scanner shows and reads: the strongest one held in the guide. */
+    fun main(a: Analysis, w: Int, h: Int): Sighting? = a.sightings.firstOrNull { it.strength >= SHOW && holds(it.quad, w, h) }
 }
 
 /**

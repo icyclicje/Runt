@@ -5,6 +5,13 @@ import android.content.pm.PackageManager
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInVertically
@@ -30,6 +37,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
@@ -42,6 +50,7 @@ import androidx.compose.material.icons.filled.CameraAlt
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.FlashOff
 import androidx.compose.material.icons.filled.FlashOn
+import androidx.compose.material.icons.filled.Inventory2
 import androidx.compose.material.icons.filled.Translate
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.AlertDialog
@@ -106,16 +115,17 @@ fun ScanScreen(vm: AppVM, nav: NavHostController, testFrames: String?) {
     val settings by vm.settings.collectAsState()
     val engine = remember { ScanEngine() }
     DisposableEffect(engine) { onDispose { engine.close() } }
-    LaunchedEffect(cat, settings.scanMode, settings.packSetId, settings.focusSetId) { engine.updatePool() }
+    LaunchedEffect(cat, settings.focusSetId) { engine.updatePool() }
     var pickFocus by remember { mutableStateOf(false) }
     val live by engine.live.collectAsState()
+    val setId by engine.set.collectAsState()
+    val pf by vm.portfolio.collectAsState()
     var result by remember { mutableStateOf<ScanResult?>(null) }
     var jackpot by remember { mutableStateOf<ScanResult?>(null) }
     var burst by remember { mutableLongStateOf(0L) }
     var shakeSeed by remember { mutableLongStateOf(0L) }
     var torch by remember { mutableStateOf(false) }
     var nextVariant by remember { mutableStateOf<String?>(null) }
-    var pickSet by remember { mutableStateOf(false) }
     val sessionStart = remember { System.currentTimeMillis() }
     val scans by vm.scans.collectAsState()
     val refProgress by Graph.refs.progress.collectAsState()
@@ -135,34 +145,31 @@ fun ScanScreen(vm: AppVM, nav: NavHostController, testFrames: String?) {
             granted -> CameraFeed(engine, torch, Modifier.fillMaxSize())
             else -> NoCamera { ask.launch(Manifest.permission.CAMERA) }
         }
-        ScanOverlay(live, Modifier.fillMaxSize())
+        ScanOverlay(live, settings.reduceMotion, Modifier.fillMaxSize())
         Column(Modifier.fillMaxSize().statusBarsPadding()) {
             Row(Modifier.fillMaxWidth().padding(horizontal = 8.dp), verticalAlignment = Alignment.CenterVertically) {
                 RoundIcon(Icons.AutoMirrored.Filled.ArrowBack, "Back") { nav.popBackStack() }
                 Spacer(Modifier.weight(1f))
-                LanguageButton(settings.scanLanguage)
+                ModeSwitch(settings.scanMode) { m -> Graph.prefs.update { it.copy(scanMode = m) }; Graph.sounds.play("click") }
+                Spacer(Modifier.weight(1f))
                 RoundIcon(if (torch) Icons.Default.FlashOn else Icons.Default.FlashOff, "Torch") { torch = !torch }
             }
+            Spacer(Modifier.height(10.dp))
+            SetChip(setId, manual = settings.focusSetId != null, loading = refProgress?.takeIf { it.setId == setId },
+                language = settings.scanLanguage, onPick = { pickFocus = true },
+                onAuto = { Graph.prefs.update { it.copy(focusSetId = null) }; engine.autoSet() })
+            if (settings.trackPacks && settings.scanMode == "collect") PackBar(engine, result)
             Spacer(Modifier.height(8.dp))
-            Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
-                Pills(listOf("collect" to "Collect", "pack" to "Pack", "check" to "Price check"), settings.scanMode, { m ->
-                    Graph.prefs.update { it.copy(scanMode = m) }
-                    if (m == "pack" && settings.packSetId == null) pickSet = true
-                })
-            }
-            if (settings.scanMode == "pack") PackBar(engine, settings.packSetId, result) { pickSet = true }
-            Spacer(Modifier.height(8.dp))
-            HintPill(live, refProgress?.let { "Loading ${cat?.set(it.setId)?.name ?: "set"} ${it.done}/${it.total}" })
+            HintPill(live, refProgress?.takeIf { it.setId != setId }?.let { "Loading ${cat?.set(it.setId)?.name ?: "set"} ${it.done}/${it.total}" })
         }
         Column(Modifier.align(Alignment.BottomCenter).fillMaxWidth().navigationBarsPadding()) {
             AnimatedVisibility(result != null, enter = slideInVertically { it } + fadeIn(), exit = slideOutVertically { it } + fadeOut()) {
                 result?.let { r ->
-                    ResultCard(r, engine, nav,
+                    ResultCard(r, engine, nav, pf?.sets?.firstOrNull { it.set.id == r.card.setId },
                         onChange = { result = it },
                         onClose = { result = null })
                 }
             }
-            if (settings.scanMode != "pack") FocusSetChip(settings.focusSetId, onPick = { pickFocus = true }) { Graph.prefs.update { it.copy(focusSetId = null) } }
             NextPrinting(nextVariant) { v -> nextVariant = v; engine.nextVariant = v }
             val session = scans.filter { it.at >= sessionStart }
             SessionStrip(session.mapNotNull { s -> cat?.card(s.cardKey)?.let { it to s.price } }, nav)
@@ -170,13 +177,19 @@ fun ScanScreen(vm: AppVM, nav: NavHostController, testFrames: String?) {
         if (burst != 0L) Burst(burst, count = 70, sparkles = true)
         jackpot?.let { j -> JackpotOverlay(j.scanId + burst, Graph.money.fmt(j.price), j.card.name) { jackpot = null } }
     }
-    if (pickFocus) SetPicker(onPick = { id -> Graph.prefs.update { it.copy(focusSetId = id) }; Graph.sounds.play("select"); pickFocus = false }, onDismiss = { pickFocus = false })
-    if (pickSet) SetPicker(onPick = { id ->
-        val s = cat?.set(id)
-        Graph.prefs.update { it.copy(packSetId = id, packCost = s?.sealedPrice ?: s?.let { x -> Graph.catalog.packs.products(x).first().price }, scanMode = "pack") }
-        engine.nextPack()
-        pickSet = false
-    }, onDismiss = { pickSet = false })
+    if (pickFocus) SetPicker(title = "Which set are you scanning?", onPick = { id -> Graph.prefs.update { it.copy(focusSetId = id) }; Graph.sounds.play("select"); pickFocus = false }, onDismiss = { pickFocus = false })
+}
+
+/** Collect (adds to the collection) or price check (adds nothing). */
+@Composable
+private fun ModeSwitch(mode: String, onChange: (String) -> Unit) {
+    Row(Modifier.clip(RoundedCornerShape(50)).background(Color.Black.copy(alpha = 0.5f)).border(1.dp, Color.White.copy(alpha = 0.14f), RoundedCornerShape(50)).padding(3.dp)) {
+        for ((k, label) in listOf("collect" to "Collect", "check" to "Price check")) {
+            val on = mode == k
+            Text(label, Modifier.clip(RoundedCornerShape(50)).background(if (on) Color.White else Color.Transparent).clickable { if (!on) onChange(k) }
+                .padding(horizontal = 14.dp, vertical = 7.dp), color = if (on) Vault.bg else Color.White.copy(alpha = 0.85f), fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+        }
+    }
 }
 
 @Composable
@@ -190,7 +203,7 @@ private fun RoundIcon(icon: androidx.compose.ui.graphics.vector.ImageVector, des
 private fun LanguageButton(current: String) {
     var open by remember { mutableStateOf(false) }
     Box {
-        Row(Modifier.padding(end = 6.dp).clip(RoundedCornerShape(50)).background(Color.Black.copy(alpha = 0.45f)).clickable { open = true }.padding(horizontal = 10.dp, vertical = 9.dp),
+        Row(Modifier.clip(RoundedCornerShape(50)).background(Color.Black.copy(alpha = 0.45f)).clickable { open = true }.padding(horizontal = 10.dp, vertical = 9.dp),
             verticalAlignment = Alignment.CenterVertically) {
             Icon(Icons.Default.Translate, null, tint = Color.White, modifier = Modifier.size(16.dp))
             Spacer(Modifier.width(4.dp))
@@ -205,37 +218,61 @@ private fun LanguageButton(current: String) {
     }
 }
 
-/** Card guide, the live outline of the card being read, and its progress. */
+/** Card guide, the outline of the card being read (only once it's known to be a card),
+ *  and its progress. The outline glides between frames instead of jumping. */
 @Composable
-private fun ScanOverlay(live: LiveScan, modifier: Modifier) {
+private fun ScanOverlay(live: LiveScan, reduceMotion: Boolean, modifier: Modifier) {
+    // plain holders, not state: they follow `live`, which already recomposes every frame
+    val shownQuad = remember { FloatArray(8) }
+    val has = remember { BooleanArray(1) }
+    live.quad?.let { q ->
+        val near = has[0] && (0 until 8).maxOf { kotlin.math.abs(q[it] - shownQuad[it]) } < 0.08f
+        for (i in 0 until 8) shownQuad[i] = if (near) shownQuad[i] * 0.45f + q[i] * 0.55f else q[i]
+        has[0] = true
+    }
+    val alpha by animateFloatAsState(if (live.quad != null) 1f else 0f, tween(if (live.quad != null) 120 else 260), label = "outline")
+    if (alpha == 0f && live.quad == null) has[0] = false
+    val hasQuad = has[0]
+    val sweep = if (reduceMotion) null else rememberInfiniteTransition(label = "scan").animateFloat(0f, 1f,
+        infiniteRepeatable(tween(2200, easing = LinearEasing), RepeatMode.Restart), label = "sweep")
+    val locked = live.state == "locked"
     BoxWithConstraints(modifier) {
         val density = LocalDensity.current
         val vw = with(density) { maxWidth.toPx() }; val vh = with(density) { maxHeight.toPx() }
         Canvas(Modifier.fillMaxSize()) {
-            // guide: a card-shaped frame with corner brackets
+            // guide: a card-shaped frame with corner brackets, dimmed while a card is outlined
             val gw = size.width * 0.74f; val gh = gw * 88f / 63f
             val gx = (size.width - gw) / 2; val gy = (size.height - gh) / 2 - size.height * 0.04f
             val arm = gw * 0.12f
-            val col = if (live.quad == null) Color.White.copy(alpha = 0.75f) else Color.White.copy(alpha = 0.25f)
+            val col = Color.White.copy(alpha = 0.8f - 0.55f * alpha)
             val st = Stroke(3.dp.toPx(), cap = StrokeCap.Round)
             for ((cx, cy, sx, sy) in listOf(floatArrayOf(gx, gy, 1f, 1f), floatArrayOf(gx + gw, gy, -1f, 1f), floatArrayOf(gx, gy + gh, 1f, -1f), floatArrayOf(gx + gw, gy + gh, -1f, -1f))) {
                 val p = Path().apply { moveTo(cx, cy + sy * arm); lineTo(cx, cy); lineTo(cx + sx * arm, cy) }
                 drawPath(p, col, style = st)
             }
-            val q = live.quad ?: return@Canvas
-            if (live.frameW == 0) return@Canvas
+            // searching: a soft line sweeps down the guide
+            if (sweep != null && alpha < 1f) {
+                val y = gy + gh * sweep.value
+                val a = (1f - alpha) * 0.55f * (1f - kotlin.math.abs(sweep.value - 0.5f) * 1.6f).coerceIn(0f, 1f)
+                drawRect(Brush.verticalGradient(listOf(Color.Transparent, Vault.mint.copy(alpha = a * 0.35f), Color.Transparent), y - 28.dp.toPx(), y + 2.dp.toPx()),
+                    Offset(gx + 6.dp.toPx(), y - 28.dp.toPx()), androidx.compose.ui.geometry.Size(gw - 12.dp.toPx(), 30.dp.toPx()))
+                drawLine(Vault.mint.copy(alpha = a), Offset(gx + 10.dp.toPx(), y), Offset(gx + gw - 10.dp.toPx(), y), 2.dp.toPx(), cap = StrokeCap.Round)
+            }
+            if (!hasQuad || live.frameW == 0 || alpha <= 0f) return@Canvas
+            val q = shownQuad
             val s = max(vw / live.frameW, vh / live.frameH)
             val dx = (vw - live.frameW * s) / 2; val dy = (vh - live.frameH * s) / 2
             fun pt(i: Int) = Offset(q[2 * i] * live.frameW * s + dx, q[2 * i + 1] * live.frameH * s + dy)
             val path = Path().apply { moveTo(pt(0).x, pt(0).y); for (i in 1..3) lineTo(pt(i).x, pt(i).y); close() }
             val brush = Brush.linearGradient(Vault.holo, pt(0), pt(2))
-            if (live.state == "locked") drawPath(path, Vault.mint.copy(alpha = 0.10f))
-            drawPath(path, brush.let { it }, style = Stroke(8.dp.toPx(), join = StrokeJoin.Round), alpha = 0.25f)
-            drawPath(path, brush, style = Stroke(3.dp.toPx(), join = StrokeJoin.Round))
-            if (live.progress > 0f && live.state != "locked") {
+            if (locked) drawPath(path, Vault.mint.copy(alpha = 0.10f * alpha))
+            drawPath(path, brush, style = Stroke(9.dp.toPx(), join = StrokeJoin.Round), alpha = 0.22f * alpha)
+            drawPath(path, brush, style = Stroke(3.dp.toPx(), join = StrokeJoin.Round), alpha = alpha)
+            if (live.progress > 0f && !locked) {
                 val c = pt(0); val r = 14.dp.toPx()
-                drawCircle(Color.Black.copy(alpha = 0.5f), r + 4.dp.toPx(), c)
-                drawArc(Vault.mint, -90f, 360f * live.progress, false, Offset(c.x - r, c.y - r), androidx.compose.ui.geometry.Size(2 * r, 2 * r), style = Stroke(3.dp.toPx(), cap = StrokeCap.Round))
+                drawCircle(Color.Black.copy(alpha = 0.5f * alpha), r + 4.dp.toPx(), c)
+                drawArc(Vault.mint, -90f, 360f * live.progress, false, Offset(c.x - r, c.y - r), androidx.compose.ui.geometry.Size(2 * r, 2 * r),
+                    style = Stroke(3.dp.toPx(), cap = StrokeCap.Round), alpha = alpha)
             }
         }
     }
@@ -251,58 +288,76 @@ private fun HintPill(live: LiveScan, loading: String?) {
     }
 }
 
+/** The pack being opened (pack tracking on): its cards and value against its price. */
 @Composable
-private fun PackBar(engine: ScanEngine, setId: String?, last: ScanResult?, onPick: () -> Unit) {
-    val set = setId?.let { Graph.catalog.catalog.value?.set(it) }
-    val (count, value, _) = remember(last) { engine.packState() }
-    val size = set?.let { Graph.catalog.packs.packSize(it) } ?: 10
-    val cost = Graph.prefs.value.packCost
+private fun PackBar(engine: ScanEngine, last: ScanResult?) {
+    val (count, value, open) = remember(last) { engine.packState() }
+    val size = last?.packSize?.takeIf { it > 0 } ?: 10
+    val set = last?.card?.setId?.let { Graph.catalog.catalog.value?.set(it) }
+    val cost = set?.let { it.sealedPrice ?: Graph.catalog.packs.products(it).firstOrNull()?.price }
     Glass(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp), padding = PaddingValues(12.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Column(Modifier.weight(1f).clickable(onClick = onPick)) {
-                Text("OPENING ▾", style = Eyebrow)
-                Text(set?.name ?: "Choose the set", fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Icon(Icons.Default.Inventory2, null, tint = Vault.mint, modifier = Modifier.size(20.dp))
+            Spacer(Modifier.width(10.dp))
+            Column(Modifier.weight(1f)) {
+                Text(if (open) "$count / $size cards" else "Scan the first card of a pack", fontWeight = FontWeight.Bold, fontSize = 14.sp)
+                if (open) Text(Graph.money.fmt(value) + (cost?.let { " of " + Graph.money.fmt(it) + " pack" } ?: ""),
+                    color = if (cost != null && value >= cost) Vault.goodText else Vault.text2, fontSize = 12.sp)
             }
-            Column(horizontalAlignment = Alignment.End) {
-                Text("$count / $size cards", fontWeight = FontWeight.Bold)
-                Text(Graph.money.fmt(value) + (cost?.let { " of " + Graph.money.fmt(it) } ?: ""), color = if (cost != null && value >= cost) Vault.goodText else Vault.text2, fontSize = 12.sp)
-            }
-            Spacer(Modifier.width(8.dp))
-            TextButton(onClick = { engine.nextPack() }) { Text("Next pack") }
+            if (open) TextButton(onClick = { engine.nextPack() }) { Text("Next pack") }
         }
-        Spacer(Modifier.height(6.dp))
-        SegmentBar(listOf(count.toDouble() to Vault.mint, (size - count).coerceAtLeast(0).toDouble() to Vault.surface3), height = 5.dp)
+        if (open) {
+            Spacer(Modifier.height(6.dp))
+            SegmentBar(listOf(count.toDouble() to Vault.mint, (size - count).coerceAtLeast(0).toDouble() to Vault.surface3), height = 5.dp)
+        }
     }
 }
 
-/** Which set the scanner keeps loaded: automatic (recent sets) or one you chose. */
+/** The set being scanned: detected from the first card (its whole set is then loaded, so
+ *  the rest scan instantly), or chosen by hand. Also the text reader's language. */
 @Composable
-private fun FocusSetChip(setId: String?, onPick: () -> Unit, onClear: () -> Unit) {
-    val name = setId?.let { Graph.catalog.catalog.value?.set(it)?.name }
-    Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp), verticalAlignment = Alignment.CenterVertically) {
-        Row(Modifier.clip(RoundedCornerShape(50)).background(Color.Black.copy(alpha = 0.5f)).border(1.dp, Color.White.copy(alpha = 0.2f), RoundedCornerShape(50))
-            .clickable(onClick = onPick).padding(horizontal = 12.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
-            Text("SET ", color = Color.White.copy(alpha = 0.7f), fontSize = 10.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.sp)
-            Text(name ?: "Auto ▾", color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+private fun SetChip(setId: String?, manual: Boolean, loading: com.mivimoose.scanner.data.RefRepo.Progress?, language: String,
+                    onPick: () -> Unit, onAuto: () -> Unit) {
+    val set = setId?.let { Graph.catalog.catalog.value?.set(it) }
+    Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp), horizontalArrangement = Arrangement.Center, verticalAlignment = Alignment.CenterVertically) {
+        Row(Modifier.clip(RoundedCornerShape(50)).background(Color.Black.copy(alpha = 0.5f)).border(1.dp, Color.White.copy(alpha = 0.16f), RoundedCornerShape(50))
+            .clickable(onClick = onPick).padding(start = 6.dp, end = 12.dp, top = 5.dp, bottom = 5.dp), verticalAlignment = Alignment.CenterVertically) {
+            val icon = set?.symbol ?: set?.logo
+            if (icon != null) coil3.compose.AsyncImage(icon, null, Modifier.size(22.dp)) else Spacer(Modifier.width(6.dp))
+            Spacer(Modifier.width(6.dp))
+            Column {
+                Text(set?.name ?: "Any set", color = Color.White, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.widthIn(max = 220.dp))
+                Text(when {
+                    loading != null -> "Loading ${loading.done}/${loading.total}"
+                    set == null -> "Detected from the first card"
+                    manual -> "Chosen · tap to change"
+                    else -> "Detected · tap to change"
+                }, color = if (loading != null) Vault.mint else Color.White.copy(alpha = 0.6f), fontSize = 10.sp)
+            }
         }
-        if (name != null) Icon(Icons.Default.Close, "Back to automatic", tint = Color.White, modifier = Modifier.padding(start = 6.dp).size(20.dp).clickable(onClick = onClear))
-        else Text("  pick one for instant scans", color = Color.White.copy(alpha = 0.6f), fontSize = 11.sp)
+        if (manual) Box(Modifier.padding(start = 6.dp).size(30.dp).clip(CircleShape).background(Color.Black.copy(alpha = 0.5f)).clickable(onClick = onAuto),
+            contentAlignment = Alignment.Center) { Icon(Icons.Default.Close, "Detect the set automatically", tint = Color.White, modifier = Modifier.size(16.dp)) }
+        Spacer(Modifier.width(6.dp))
+        LanguageButton(language)
     }
 }
 
 @Composable
 private fun NextPrinting(selected: String?, onSelect: (String?) -> Unit) {
-    val opts = listOf<Pair<String?, String>>(null to "Normal", "reverse" to "Reverse", "pokeball" to "Poké Ball", "masterball" to "Master Ball", "first" to "1st Ed.")
-    Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
-        Text("NEXT", color = Color.White.copy(alpha = 0.7f), fontSize = 10.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.sp)
-        Spacer(Modifier.width(8.dp))
-        LazyRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-            items(opts) { (v, label) ->
-                val on = v == selected
-                Text(label, Modifier.clip(RoundedCornerShape(50)).background(if (on) Vault.mint else Color.Black.copy(alpha = 0.5f))
-                    .border(1.dp, if (on) Color.Transparent else Color.White.copy(alpha = 0.2f), RoundedCornerShape(50))
-                    .clickable { Graph.sounds.play("click"); onSelect(if (on) null else v) }.padding(horizontal = 11.dp, vertical = 6.dp),
-                    color = if (on) Vault.bg else Color.White, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+    val opts = listOf<Pair<String?, String>>(null to "Normal", "reverse" to "Reverse holo", "pokeball" to "Poké Ball", "masterball" to "Master Ball", "first" to "1st Edition")
+    var open by remember { mutableStateOf(false) }
+    Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 6.dp), horizontalArrangement = Arrangement.End) {
+        Box {
+            val on = selected != null
+            Row(Modifier.clip(RoundedCornerShape(50)).background(if (on) Vault.mint else Color.Black.copy(alpha = 0.5f))
+                .border(1.dp, if (on) Color.Transparent else Color.White.copy(alpha = 0.2f), RoundedCornerShape(50))
+                .clickable { Graph.sounds.play("click"); open = true }.padding(horizontal = 12.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+                Text("NEXT CARD ", color = if (on) Vault.bg.copy(alpha = 0.7f) else Color.White.copy(alpha = 0.6f), fontSize = 10.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.sp)
+                Text((opts.firstOrNull { it.first == selected }?.second ?: "Normal") + " ▾", color = if (on) Vault.bg else Color.White, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+            }
+            DropdownMenu(open, { open = false }) {
+                for ((v, label) in opts) DropdownMenuItem({ Text(label, fontWeight = if (v == selected) FontWeight.Bold else FontWeight.Normal) }, { onSelect(v); open = false })
             }
         }
     }
@@ -331,14 +386,21 @@ private fun SessionStrip(items: List<Pair<Card, Double>>, nav: NavHostController
 
 /** What was just scanned: price, value tier, duplicate status, PSA population, quick fixes. */
 @Composable
-private fun ResultCard(r: ScanResult, engine: ScanEngine, nav: NavHostController, onChange: (ScanResult) -> Unit, onClose: () -> Unit) {
+private fun ResultCard(r: ScanResult, engine: ScanEngine, nav: NavHostController, progress: com.mivimoose.scanner.data.SetProgress?,
+                       onChange: (ScanResult) -> Unit, onClose: () -> Unit) {
     val tier = if (r.ignored) 0 else r.tier
     val shape = RoundedCornerShape(24.dp)
     var graded by remember(r.card.key, r.variant) { mutableStateOf(Graph.prices.cachedGraded(r.card, r.variant)) }
     var trend by remember(r.card.key, r.variant) { mutableStateOf<Double?>(null) }
     var showAlts by remember(r.scanId) { mutableStateOf(false) }
     LaunchedEffect(r.card.key, r.variant) {
-        Graph.prices.refreshCard(r.card)
+        if (Graph.prices.refreshCard(r.card, maxAgeMs = 60_000L)) {
+            val live = r.card.priceFor(r.variant)
+            if (kotlin.math.abs(live - r.price) >= 0.01) {
+                if (r.scanId > 0) Graph.store.setScanVariant(r.scanId, r.variant, live)
+                onChange(r.copy(price = live))
+            }
+        }
         if (Graph.prefs.value.showGraded && graded == null) graded = Graph.prices.graded(r.card, r.variant, Graph.catalog.catalog.value?.set(r.card.setId))
         Graph.prices.history(r.card, r.variant, "month")?.let { h -> if (h.size >= 2 && h.first().price > 0) trend = (h.last().price - h.first().price) / h.first().price }
     }
@@ -368,8 +430,23 @@ private fun ResultCard(r: ScanResult, engine: ScanEngine, nav: NavHostController
                         Spacer(Modifier.width(8.dp))
                         Delta(trend, small = true)
                     }
-                    if (tier > 0) Text(Vault.tierName(tier), color = Vault.tierColor(tier), fontWeight = FontWeight.Black, fontSize = 12.sp, letterSpacing = 1.5.sp)
+                    PriceBasis(r.card, r.variant)
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        if (tier > 0) { Text(Vault.tierName(tier), color = Vault.tierColor(tier), fontWeight = FontWeight.Black, fontSize = 12.sp, letterSpacing = 1.5.sp); Spacer(Modifier.width(8.dp)) }
+                        Text(r.card.rarity, color = Vault.muted, fontSize = 11.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    }
                 }
+            }
+            // how this card moves its set along
+            if (progress != null && r.mode != "check") {
+                Spacer(Modifier.height(10.dp))
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(progress.set.name, color = Vault.text2, fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
+                    Text("${progress.ownedMain}/${progress.totalMain}" + if (r.ownedBefore == 0 && r.added) "  +1" else "",
+                        color = if (r.ownedBefore == 0 && r.added) Vault.goodText else Vault.text2, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+                }
+                Spacer(Modifier.height(4.dp))
+                SegmentBar(listOf(progress.ownedMain.toDouble() to Vault.series1, (progress.totalMain - progress.ownedMain).coerceAtLeast(0).toDouble() to Vault.surface3), height = 4.dp)
             }
             val variants = r.card.variants()
             if (variants.size > 1) {
@@ -420,6 +497,12 @@ private fun PsaStrip(g: GradedInfo) {
             Text("PSA 10 " + Graph.money.fmt(g.psa10, cents = (g.psa10 ?: 0.0) < 100), fontWeight = FontWeight.Bold, fontSize = 14.sp)
             Text("Pop ${"%,d".format(g.psaTotal)}" + (g.gemRate?.let { " · gem rate %.0f%%".format(it * 100) } ?: "") + (g.psa9?.let { " · PSA 9 " + Graph.money.short(it) } ?: ""),
                 color = Vault.text2, fontSize = 12.sp)
+            g.universal?.let { u ->
+                Text("All graders ${"%,d".format(u.total)}" + (u.gemRate?.let { " · gem %.0f%%".format(it * 100) } ?: "") +
+                    " · " + u.graders.entries.filter { it.value.total > 0 }.sortedByDescending { it.value.total }.joinToString(" ") { e ->
+                        (mapOf("psa" to "PSA", "cgc" to "CGC", "beckett" to "BGS", "sgc" to "SGC")[e.key] ?: e.key) + " " + e.value.total.let { n -> if (n >= 1000) "%.1fk".format(n / 1000.0) else "$n" } },
+                    color = Vault.muted, fontSize = 11.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            }
         }
         g.psa?.let { pop ->
             val mx = max(1, pop.max())
@@ -468,13 +551,13 @@ private fun NoCamera(onAsk: () -> Unit) {
 }
 
 @Composable
-fun SetPicker(onPick: (String) -> Unit, onDismiss: () -> Unit) {
+fun SetPicker(title: String = "Which set?", onPick: (String) -> Unit, onDismiss: () -> Unit) {
     var q by remember { mutableStateOf("") }
     val cat = Graph.catalog.catalog.value ?: return
     val sets = cat.order.mapNotNull { cat.set(it) }.filter { !it.firstEdition && (q.isBlank() || com.mivimoose.core.catalog.Catalog.fold("${it.name} ${it.code ?: ""} ${it.nameLocal ?: ""}").contains(com.mivimoose.core.catalog.Catalog.fold(q))) }
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Which set are you opening?") },
+        title = { Text(title) },
         text = {
             Column {
                 SearchField(q, { q = it }, "Search sets")

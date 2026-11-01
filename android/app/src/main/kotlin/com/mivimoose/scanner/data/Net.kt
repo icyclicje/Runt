@@ -5,7 +5,9 @@ import com.mivimoose.core.net.Http
 import com.mivimoose.core.net.HttpException
 import okhttp3.Cache
 import okhttp3.OkHttpClient
+import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.Request
+import okhttp3.RequestBody.Companion.toRequestBody
 import java.io.File
 import java.util.concurrent.TimeUnit
 
@@ -35,6 +37,15 @@ class Net(ctx: Context) : Http {
             if (!r.isSuccessful) throw HttpException(r.code, url)
             r.request.url.toString() to r.body.string()
         }
+
+    override fun post(url: String, json: String, headers: Map<String, String>): String {
+        val b = Request.Builder().url(url).header("User-Agent", UA).post(json.toRequestBody("application/json".toMediaType()))
+        headers.forEach { (k, v) -> b.header(k, v) }
+        return client.newCall(b.build()).execute().use { r ->
+            if (!r.isSuccessful) throw HttpException(r.code, url)
+            r.body.string()
+        }
+    }
 
     /** Download to a file with ETag revalidation. Returns true when the file changed. */
     fun fetchTo(url: String, file: File): Boolean {

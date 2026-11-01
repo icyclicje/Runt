@@ -22,7 +22,7 @@ const val REF_H = 336
 
 /** A card found by keypoint matching: inliers agree with the homography, matched voted for
  *  the card, spread = share of the card's area the inliers cover. */
-class KpHit(val key: String, val quad: Quad, val inliers: Int, val votes: Int, val spread: Float, val matched: Int)
+class KpHit(val key: String, val quad: Quad, val inliers: Int, val votes: Int, val spread: Float, val matched: Int, val ySpan: Float = 1f)
 
 /** Frame keypoints in frame pixels plus the downscale factor the homographies were fitted at. */
 class FrameFeatures(val pts: FloatArray, val desc: Mat, val scale: Float) {
@@ -156,7 +156,7 @@ class KeypointIndex {
                 val quad = qs.scaled(1f / s)
                 if (hits.any { it.quad.iou(quad) > 0.4f }) continue
                 sel.forEachIndexed { j, it -> if (inl[j].toInt() != 0) used[qi[it]] = true }
-                hits += KpHit(keys[c], quad, nIn, votes[c], spread, sel.size)
+                hits += KpHit(keys[c], quad, nIn, votes[c], spread, sel.size, (y1 - y0) / REF_H)
             } finally {
                 src.release(); dst.release(); mask.release(); h.release()
             }

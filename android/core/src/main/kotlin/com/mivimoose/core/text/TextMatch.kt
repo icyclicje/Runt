@@ -180,6 +180,9 @@ object TextMatch {
         if (clues.isEmpty) return emptyList()
         val codeSets = clues.codes.flatMap { catalog.byCode[it] ?: emptyList() }.map { it.id }.toSet()
         val readNums = clues.numbers.map { Catalog.normNumber(it.number) }.distinct()
+        // A card prints its number along the bottom; a number elsewhere (a checklist, a price
+        // list, a box) is weaker evidence
+        val bottomNums = clues.numbers.filter { it.bottom }.map { Catalog.normNumber(it.number) }.toSet()
         val rawNums = clues.numbers.map { it.number.uppercase() }.distinct()
         val totals = clues.numbers.mapNotNull { it.total }.distinct()
         val pool = LinkedHashSet<Card>()
@@ -206,8 +209,9 @@ object TextMatch {
             val tOk = totals.isNotEmpty() && totalOk(set, totals)
             val codeOk = set.id in codeSets
             if (!numExact && !numNear && ns < 0.75f) continue
-            var score = 0.40f * ns + (if (numExact) 0.25f else if (numNear) 0.10f else 0f) + (if (tOk) 0.15f else 0f) + (if (codeOk) 0.20f else 0f)
-            if (ns >= 0.9f && numExact) score += 0.10f
+            val atBottom = cn in bottomNums
+            var score = 0.40f * ns + (if (numExact) (if (atBottom) 0.25f else 0.06f) else if (numNear) 0.10f else 0f) + (if (tOk) 0.15f else 0f) + (if (codeOk) 0.20f else 0f)
+            if (ns >= 0.9f && numExact && atBottom) score += 0.10f
             if (totals.isNotEmpty() && !tOk && !codeOk) score -= 0.15f
             if (!langMatches(set, clues.script)) score -= 0.25f
             // Latin text can't tell English from Indonesian: assume English

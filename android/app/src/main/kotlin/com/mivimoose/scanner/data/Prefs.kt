@@ -17,19 +17,23 @@ data class Settings(
     val uiSounds: Boolean = true,
     val haptics: Boolean = true,
     val volume: Float = 1f,
-    /** collect: add scans to the collection; pack: track a pack being opened; check: price check only. */
+    /** collect: add scans to the collection; check: price check only. */
     val scanMode: String = "collect",
+    /** Count each pack's cards and value against its price while collecting (the set is detected). */
+    val trackPacks: Boolean = false,
     /** What to do with a card you already own: warn (add it, warned), skip (don't add), ask. */
     val dupePolicy: String = "warn",
     /** auto, en, ja, ko, zh-tw, zh-cn, th, id */
     val scanLanguage: String = "auto",
     val defaultCondition: String = "NM",
     val packSetId: String? = null,
-    /** Set chosen in the scanner for instant scans in any mode (null = automatic). */
+    /** Set chosen by hand in the scanner (null = detected from the cards). */
     val focusSetId: String? = null,
     val packCost: Double? = null,
     val showGraded: Boolean = true,
     val psaToken: String = "",
+    /** GemRate API key (optional): population across PSA, CGC, Beckett and SGC. */
+    val gemRateKey: String = "",
     val ocr: Boolean = true,
     /** Live price refresh while the app is open, minutes. */
     val refreshMinutes: Int = 15,
@@ -63,7 +67,9 @@ class Prefs(ctx: Context) {
             uiSounds = j.optBoolean("uiSounds", d.uiSounds),
             haptics = j.optBoolean("haptics", d.haptics),
             volume = j.optDouble("volume", d.volume.toDouble()).toFloat(),
-            scanMode = j.optString("scanMode", d.scanMode),
+            // "pack" was a scan mode before pack tracking became a setting
+            scanMode = j.optString("scanMode", d.scanMode).let { if (it == "pack") "collect" else it },
+            trackPacks = j.optBoolean("trackPacks", j.optString("scanMode") == "pack"),
             dupePolicy = j.optString("dupePolicy", d.dupePolicy),
             scanLanguage = j.optString("scanLanguage", d.scanLanguage),
             defaultCondition = j.optString("defaultCondition", d.defaultCondition),
@@ -72,6 +78,7 @@ class Prefs(ctx: Context) {
             packCost = if (j.has("packCost") && !j.isNull("packCost")) j.optDouble("packCost") else null,
             showGraded = j.optBoolean("showGraded", d.showGraded),
             psaToken = j.optString("psaToken", ""),
+            gemRateKey = j.optString("gemRateKey", ""),
             ocr = j.optBoolean("ocr", d.ocr),
             refreshMinutes = j.optInt("refreshMinutes", d.refreshMinutes),
             reduceMotion = j.optBoolean("reduceMotion", d.reduceMotion),
@@ -83,9 +90,9 @@ class Prefs(ctx: Context) {
     private fun write(s: Settings) = JSONObject().apply {
         put("currency", s.currency); put("hitValue", s.hitValue); put("bigValue", s.bigValue); put("jackpotValue", s.jackpotValue)
         put("jackpotSound", s.jackpotSound); put("sounds", s.sounds); put("uiSounds", s.uiSounds); put("haptics", s.haptics)
-        put("volume", s.volume.toDouble()); put("scanMode", s.scanMode); put("dupePolicy", s.dupePolicy)
+        put("volume", s.volume.toDouble()); put("scanMode", s.scanMode); put("trackPacks", s.trackPacks); put("dupePolicy", s.dupePolicy)
         put("scanLanguage", s.scanLanguage); put("defaultCondition", s.defaultCondition); put("packSetId", s.packSetId ?: ""); put("focusSetId", s.focusSetId ?: "")
-        put("packCost", s.packCost ?: JSONObject.NULL); put("showGraded", s.showGraded); put("psaToken", s.psaToken)
+        put("packCost", s.packCost ?: JSONObject.NULL); put("showGraded", s.showGraded); put("psaToken", s.psaToken); put("gemRateKey", s.gemRateKey)
         put("ocr", s.ocr); put("refreshMinutes", s.refreshMinutes); put("reduceMotion", s.reduceMotion); put("onboarded", s.onboarded)
         put("cardLanguages", org.json.JSONArray(s.cardLanguages.toList()))
     }.toString()

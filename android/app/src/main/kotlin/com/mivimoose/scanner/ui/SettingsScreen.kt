@@ -97,6 +97,10 @@ fun SettingsScreen(vm: AppVM, nav: NavHostController) {
             }
         }
         Section("Scanning") {
+            Toggle("Track packs", s.trackPacks) { v -> set { it.copy(trackPacks = v) } }
+            Text("Counts each pack's cards and their value against the pack's price. The set is detected from the cards; " +
+                "a card from another set, or a full pack, starts the next pack.", color = Vault.muted, fontSize = 12.sp)
+            Spacer(Modifier.height(10.dp))
             Text("When you scan a card you already own", color = Vault.text2, fontSize = 13.sp)
             Pills(listOf("warn" to "Add it, warn me", "skip" to "Don't add", "ask" to "Ask"), s.dupePolicy, { v -> set { it.copy(dupePolicy = v) } })
             Spacer(Modifier.height(8.dp))
@@ -108,6 +112,12 @@ fun SettingsScreen(vm: AppVM, nav: NavHostController) {
         Section("Graded cards") {
             Toggle("Show PSA population and graded prices", s.showGraded) { v -> set { it.copy(showGraded = v) } }
             Text("Population and graded prices come from PriceCharting (personal use), cached for a week per card.", color = Vault.muted, fontSize = 12.sp)
+            Spacer(Modifier.height(10.dp))
+            var key by remember { mutableStateOf(s.gemRateKey) }
+            OutlinedTextField(key, { t -> key = t.trim(); set { it.copy(gemRateKey = key) } }, Modifier.fillMaxWidth(),
+                label = { Text("GemRate API key (optional)") }, singleLine = true)
+            Text("With a key from GemRate, the population covers PSA, CGC, Beckett and SGC, with half grades and each grader's gem rate. " +
+                "GemRate gives keys on request (gemrate.com); their website itself can't be read by apps.", color = Vault.muted, fontSize = 12.sp)
         }
         Section("Display") {
             Toggle("Reduce motion (no tilt, confetti or shake)", s.reduceMotion) { v -> set { it.copy(reduceMotion = v) } }

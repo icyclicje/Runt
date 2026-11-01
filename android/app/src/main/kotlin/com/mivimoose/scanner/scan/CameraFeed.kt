@@ -168,9 +168,10 @@ private suspend fun bench(engine: ScanEngine, root: File, show: (Bitmap) -> Unit
     val oldMode = prefs.value.scanMode
     prefs.update { it.copy(scanMode = "check") }
     com.mivimoose.scanner.Graph.store.clearScans()
-    engine.updatePool()
+    engine.autoSet()
     val seqs = root.listFiles()!!.filter { File(it, "truth.json").exists() }.sortedBy { it.name }
     var ok = 0; var wrong = 0; var n = 0
+    var negFrames = 0; var negShown = 0          // non-card objects outlined as a card
     val delays = ArrayList<Int>()
     for (d in seqs) {
         val truth = org.json.JSONObject(File(d, "truth.json").readText())
@@ -193,6 +194,7 @@ private suspend fun bench(engine: ScanEngine, root: File, show: (Bitmap) -> Unit
                 Utils.bitmapToMat(b, rgba); Imgproc.cvtColor(rgba, gray, Imgproc.COLOR_RGBA2GRAY)
                 engine.onFrame(gray, t); rgba.release(); gray.release()
             }
+            if (key.isEmpty()) { negFrames++; if (engine.live.value.quad != null) negShown++ }
             val ms = (System.nanoTime() - t0) / 1_000_000
             t += maxOf(ms, 66L) / 1000.0
             delay(maxOf(0L, 66L - ms))
@@ -208,6 +210,7 @@ private suspend fun bench(engine: ScanEngine, root: File, show: (Bitmap) -> Unit
             (if (mine.isNotEmpty()) "ok +${mine.first().second}f" else "MISSED") + (if (others.isNotEmpty()) " FALSE ${others.map { it.first }}" else ""))
     }
     delays.sort()
-    Log.i("BENCH", "SUMMARY ${root.name}: scanned $ok/$n, false $wrong, median delay ${delays.getOrNull(delays.size / 2)} frames")
+    Log.i("BENCH", "SUMMARY ${root.name}: scanned $ok/$n, false $wrong, median delay ${delays.getOrNull(delays.size / 2)} frames" +
+        if (negFrames > 0) ", non-cards outlined in $negShown/$negFrames frames" else "")
     prefs.update { it.copy(scanMode = oldMode) }
 }

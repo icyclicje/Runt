@@ -22,6 +22,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -110,6 +111,7 @@ fun MarketScreen(vm: AppVM, nav: NavHostController) {
         val packs = Graph.catalog.packs
         val ranked = newest.filter { it.lang == "en" && it.sealedPrice != null }.sortedByDescending { it.release }.take(16)
             .map { s -> Triple(s, packs.expectedValue(s), s.sealedPrice!!) }.sortedByDescending { it.second / it.third }
+        item { LaunchedEffect(Unit) { for (s in ranked) Graph.prices.refreshPack(s.first) } }
         items(ranked, key = { "ev" + it.first.id }) { (s, ev, price) ->
             Glass(Modifier.fillMaxWidth().padding(bottom = 8.dp), onClick = { nav.navigate(Routes.tool("ev") + "?set=" + android.net.Uri.encode(s.id)) }, padding = PaddingValues(12.dp)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {

@@ -12,7 +12,10 @@ import org.opencv.features2d.BFMatcher
 import org.opencv.features2d.ORB
 import org.opencv.imgproc.Imgproc
 import java.util.LinkedHashMap
+import kotlin.math.abs
 import kotlin.math.hypot
+import kotlin.math.max
+import kotlin.math.min
 import kotlin.math.sqrt
 
 /** ORB keypoints of a straightened card: points (x,y pairs) and 32-byte descriptors. */
@@ -69,8 +72,26 @@ object Orb {
         ).track()
         if (a.empty() || mask.empty()) return@matScope 0
         val scale = hypot(a.get(0, 0)[0], a.get(1, 0)[0])
-        if (scale !in 0.75..1.33) return@matScope 0
-        Core.countNonZero(mask)
+        if (scale !in 0.85..1.18) return@matScope 0
+        // Both images are straightened cards, so the card's middle must land on the middle:
+        // the same artwork on a poster or a pack sits somewhere else within its outline.
+        val cx = CANON_W / 2.0; val cy = CANON_H / 2.0
+        val mx = a.get(0, 0)[0] * cx + a.get(0, 1)[0] * cy + a.get(0, 2)[0]
+        val my = a.get(1, 0)[0] * cx + a.get(1, 1)[0] * cy + a.get(1, 2)[0]
+        if (abs(mx - cx) > 0.12 * CANON_W || abs(my - cy) > 0.1 * CANON_H) return@matScope 0
+        val inl = Core.countNonZero(mask)
+        // ...and isn't stretched one way: artwork cropped to a poster's shape is
+        if (inl >= 6) {
+            val m = ByteArray(mask.total().toInt()).also { mask.get(0, 0, it) }
+            val si = src.indices.filter { it < m.size && m[it].toInt() != 0 }
+            val full = Calib3d.estimateAffine2D(MatOfPoint2f(*si.map { src[it] }.toTypedArray()).track(),
+                MatOfPoint2f(*si.map { dst[it] }.toTypedArray()).track()).track()
+            if (!full.empty()) {
+                val sx = hypot(full.get(0, 0)[0], full.get(1, 0)[0]); val sy = hypot(full.get(0, 1)[0], full.get(1, 1)[0])
+                if (max(sx, sy) / min(sx, sy).coerceAtLeast(1e-6) > 1.2) return@matScope 0
+            }
+        }
+        inl
     }
 }
 
