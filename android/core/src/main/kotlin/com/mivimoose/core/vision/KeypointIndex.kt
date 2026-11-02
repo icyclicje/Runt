@@ -22,7 +22,7 @@ const val REF_H = 336
 
 /** A card found by keypoint matching: inliers agree with the homography, matched voted for
  *  the card, spread = share of the card's area the inliers cover. */
-class KpHit(val key: String, val quad: Quad, val inliers: Int, val votes: Int, val spread: Float, val matched: Int, val ySpan: Float = 1f)
+class KpHit(val key: String, val quad: Quad, val inliers: Int, val votes: Int, val spread: Float, val matched: Int, val ySpan: Float = 1f, val artInliers: Int = 0)
 
 /** Frame keypoints in frame pixels plus the downscale factor the homographies were fitted at. */
 class FrameFeatures(val pts: FloatArray, val desc: Mat, val scale: Float) {
@@ -38,54 +38,51 @@ class FrameFeatures(val pts: FloatArray, val desc: Mat, val scale: Float) {
  * card's exact outline, even when its edges can't be seen.
  */
 class KeypointIndex {
-    private var keys: Array<String> = emptyArray()
-    private var cardOf = IntArray(0)
-    private var off = IntArray(1)
-    private var pts = FloatArray(0)
-    private var bytes = ByteArray(0)
-    private var lsh: Lsh? = null
-    private var indexOf: Map<String, Int> = emptyMap()
+    /** One pool of cards. Replaced as a whole: frames go on being analysed during a reload. */
+    private class Pool(val keys: Array<String>, val cardOf: IntArray, val off: IntArray, val pts: FloatArray, val bytes: ByteArray, val lsh: Lsh?, val indexOf: Map<String, Int>)
+    @Volatile private var pool = Pool(emptyArray(), IntArray(0), IntArray(1), FloatArray(0), ByteArray(0), null, emptyMap())
     var minSpread = 0.06f
-    val size get() = keys.size
+    val size get() = pool.keys.size
 
-    @Synchronized
     fun load(refs: Collection<RefCard>) {
         val list = refs.filter { it.kpPts != null && it.kpDes != null }
-        keys = list.map { it.key }.toTypedArray()
-        indexOf = keys.withIndex().associate { it.value to it.index }
+        val keys = list.map { it.key }.toTypedArray()
         val sizes = list.map { it.kpPts!!.size / 2 }
-        off = IntArray(list.size + 1).also { o -> sizes.forEachIndexed { i, n -> o[i + 1] = o[i] + n } }
+        val off = IntArray(list.size + 1).also { o -> sizes.forEachIndexed { i, n -> o[i + 1] = o[i] + n } }
         val total = off.last()
-        cardOf = IntArray(total)
-        pts = FloatArray(total * 2)
-        bytes = ByteArray(total * 32)
+        val cardOf = IntArray(total)
+        val pts = FloatArray(total * 2)
+        val bytes = ByteArray(total * 32)
         list.forEachIndexed { i, r ->
             for (j in off[i] until off[i + 1]) cardOf[j] = i
             System.arraycopy(r.kpPts!!, 0, pts, off[i] * 2, sizes[i] * 2)
             System.arraycopy(r.kpDes!!, 0, bytes, off[i] * 32, sizes[i] * 32)
         }
         // Bigger hash keys keep buckets small when many sets are loaded.
-        lsh = if (total == 0) null else Lsh(bytes, total, tables = if (total < 300_000) 6 else 8, keyBits = if (total < 150_000) 16 else if (total < 300_000) 18 else 22)
+        val lsh = if (total == 0) null else Lsh(bytes, total, tables = if (total < 300_000) 6 else 8, keyBits = if (total < 150_000) 16 else if (total < 300_000) 18 else 22)
+        pool = Pool(keys, cardOf, off, pts, bytes, lsh, keys.withIndex().associate { it.value to it.index })
     }
 
     /** Cards most of the frame's keypoints roughly point at (fast, approximate). */
-    fun shortlist(q: ByteArray, n: Int, top: Int = 15): List<Int> {
-        val l = lsh ?: return emptyList()
-        val votes = IntArray(keys.size)
+    private fun shortlist(p: Pool, q: ByteArray, n: Int, top: Int = 8): List<Int> {
+        val l = p.lsh ?: return emptyList()
+        val votes = IntArray(p.keys.size)
         for (i in 0 until n) {
             val (idx, d) = l.nearest(q, i)
-            if (idx >= 0 && d < 64) votes[cardOf[idx]]++
+            if (idx >= 0 && d < 64) votes[p.cardOf[idx]]++
         }
         return votes.indices.sortedByDescending { votes[it] }.take(top).filter { votes[it] >= 3 }
     }
 
     fun detect(frame: FrameFeatures, frameW: Int, frameH: Int, maxCards: Int = 3, minInliers: Int = 10,
                extra: Collection<String> = emptyList(), onlyExtra: Boolean = false): List<KpHit> {
-        if (lsh == null || frame.count < 8) return emptyList()
+        val p = pool
+        val keys = p.keys; val off = p.off; val cardOf = p.cardOf; val bytes = p.bytes; val pts = p.pts
+        if (p.lsh == null || frame.count < 8) return emptyList()
         val n = frame.count
         val qBytes = ByteArray(n * 32).also { frame.desc.get(0, 0, it) }
-        val cand = (if (onlyExtra) mutableListOf() else shortlist(qBytes, n).toMutableList())
-        for (k in extra) indexOf[k]?.let { if (it !in cand) cand += it }
+        val cand = (if (onlyExtra) mutableListOf() else Prof.time("d.lsh") { shortlist(p, qBytes, n) }.toMutableList())
+        for (k in extra) p.indexOf[k]?.let { if (it !in cand) cand += it }
         if (cand.isEmpty()) return emptyList()
         val rows = cand.flatMap { c -> (off[c] until off[c + 1]).toList() }.toIntArray()
         if (rows.isEmpty()) return emptyList()
@@ -95,7 +92,7 @@ class KeypointIndex {
         train.put(0, 0, tb)
         val pairs = ArrayList<MatOfDMatch>()
         try {
-            BF.get().knnMatch(frame.desc, train, pairs, 2)
+            Prof.time("d.bf") { BF.get().knnMatch(frame.desc, train, pairs, 2) }
         } catch (e: Exception) {
             train.release(); return emptyList()
         }
@@ -129,7 +126,7 @@ class KeypointIndex {
             val dst = MatOfPoint2f(*sel.map { Point(frame.pts[2 * qi[it]] * s.toDouble(), frame.pts[2 * qi[it] + 1] * s.toDouble()) }.toTypedArray())
             val mask = Mat()
             val h = try {
-                Calib3d.findHomography(src, dst, Calib3d.USAC_MAGSAC, 3.5, mask, 800, 0.995)
+                Prof.time("d.homog") { Calib3d.findHomography(src, dst, Calib3d.USAC_MAGSAC, 3.5, mask, 800, 0.995) }
             } catch (e: Exception) { Mat() }
             try {
                 if (h.empty() || mask.empty()) continue
@@ -138,10 +135,12 @@ class KeypointIndex {
                 if (nIn < minInliers) continue
                 // the matches must cover a fair part of the card, not one small detail
                 var x0 = Float.MAX_VALUE; var x1 = -Float.MAX_VALUE; var y0 = Float.MAX_VALUE; var y1 = -Float.MAX_VALUE
+                var art = 0
                 sel.forEachIndexed { j, it ->
                     if (inl[j].toInt() != 0) {
                         val x = pts[2 * ti[it]]; val y = pts[2 * ti[it] + 1]
                         x0 = min(x0, x); x1 = max(x1, x); y0 = min(y0, y); y1 = max(y1, y)
+                        if (y >= Orb.ART_TOP * REF_H && y <= Orb.ART_BOTTOM * REF_H) art++
                     }
                 }
                 val spread = (x1 - x0) * (y1 - y0) / (REF_W * REF_H)
@@ -156,7 +155,7 @@ class KeypointIndex {
                 val quad = qs.scaled(1f / s)
                 if (hits.any { it.quad.iou(quad) > 0.4f }) continue
                 sel.forEachIndexed { j, it -> if (inl[j].toInt() != 0) used[qi[it]] = true }
-                hits += KpHit(keys[c], quad, nIn, votes[c], spread, sel.size, (y1 - y0) / REF_H)
+                hits += KpHit(keys[c], quad, nIn, votes[c], spread, sel.size, (y1 - y0) / REF_H, art)
             } finally {
                 src.release(); dst.release(); mask.release(); h.release()
             }

@@ -115,7 +115,8 @@ fun CollectionScreen(vm: AppVM, nav: NavHostController) {
                 for (s in sets) {
                     if (s.series != lastSeries) {
                         lastSeries = s.series
-                        item(span = { GridItemSpan(3) }, key = "h" + s.lang + s.series) {
+                        // keyed by its first set: a list key used twice crashes the app
+                        item(span = { GridItemSpan(3) }, key = "h" + s.id) {
                             Text(s.series.ifEmpty { "Other" }, style = Eyebrow, modifier = Modifier.padding(top = 10.dp))
                         }
                     }

@@ -21,6 +21,8 @@ class Sighting(
     val sides: Int = 4,
     /** Share of the card's height its matched keypoints span (keypoint sightings). */
     val ySpan: Float = 1f,
+    /** Matched keypoints on the artwork: same-layout cards can't fake these. */
+    val artInliers: Int = 0,
 )
 
 class Analysis(
@@ -32,7 +34,27 @@ class Analysis(
     val sharpness: Float,
     val glare: Float,
     val millis: Long,
+    /** What the built-in index thinks the unsettled card in the guide is: suggestions only. */
+    val suggested: List<AtlasHit> = emptyList(),
 )
+
+/** Where the frame time goes, in total milliseconds per stage (for the benchmarks). */
+object Prof {
+    private val totals = java.util.concurrent.ConcurrentHashMap<String, LongArray>()
+    inline fun <T> time(name: String, block: () -> T): T {
+        val t0 = System.nanoTime()
+        try { return block() } finally { add(name, System.nanoTime() - t0) }
+    }
+    fun add(name: String, nanos: Long) {
+        val a = totals.getOrPut(name) { LongArray(2) }
+        synchronized(a) { a[0] += nanos; a[1]++ }
+    }
+    fun reset() = totals.clear()
+    /** "stage total/calls" per stage, per analysed frame of `frames`. */
+    fun report(frames: Int): String = totals.entries.sortedByDescending { it.value[0] }.joinToString("  ") { (k, v) ->
+        "$k %.1fms(%.2fx)".format(v[0] / 1e6 / frames.coerceAtLeast(1), v[1].toFloat() / frames.coerceAtLeast(1))
+    }
+}
 
 /**
  * Per-frame recognition, as in the desktop scanner: artwork keypoints matched over the
@@ -46,10 +68,12 @@ class Recognizer(val index: CardIndex) {
     private val kpWeights = floatArrayOf(-6.0f, 2.0f, 6.0f, 20.0f, 2.0f)
     private val edgeWeights = floatArrayOf(-9.0f, 1.9f, 5.8f, 20.0f)
     private val edgeCap = 0.75f
+    /** With this many keypoints agreeing on the straightened card there's no doubt left. */
+    private val edgeProof = 40
 
     var minArea = 0.04f
-    var frameMaxSide = 960
-    var frameBudget = 2000
+    var frameMaxSide = 720
+    var frameBudget = 1200
     var useKeypoints = true
 
     private fun prob(z: Float) = (((1f / (1f + exp(-z.coerceIn(-30f, 30f)))) - 0.25f) / 0.75f).coerceIn(0f, 1f)
@@ -58,7 +82,7 @@ class Recognizer(val index: CardIndex) {
         val s = prob(edgeWeights[0] + edgeWeights[1] * ln(1f + max(0, inliers)) + edgeWeights[2] * score + edgeWeights[3] * margin)
         // An outline match only counts once keypoints back it up: during motion blur the
         // fingerprint alone can be fooled several frames running.
-        return min(s, edgeCap) * ((inliers - 8) / 16f).coerceIn(0f, 1f)
+        return (if (inliers >= edgeProof) min(s, 0.95f) else min(s, edgeCap)) * ((inliers - 8) / 16f).coerceIn(0f, 1f)
     }
 
     fun kpStrength(score: Float, margin: Float, inliers: Int, spread: Float): Float =
@@ -67,8 +91,9 @@ class Recognizer(val index: CardIndex) {
     fun analyze(gray: Mat, maxCards: Int = 2): Analysis {
         val t0 = System.nanoTime()
         val fp = index.fingerprints
+        val w = gray.cols(); val h = gray.rows()
         val edges = ArrayList<EdgeMap>()
-        val outlines = CardFinder.find(gray, maxCandidates = 4, minArea = minArea, edgesOut = edges)
+        val outlines = Prof.time("find") { CardFinder.find(gray, maxCandidates = 2, minArea = minArea, edgesOut = edges) { Guide.holds(it, w, h) } }
         val edgeMap = edges.firstOrNull()
         val sightings = ArrayList<Sighting>()
         var sharp = 0f; var glare = 0f; var measured = false
@@ -77,58 +102,74 @@ class Recognizer(val index: CardIndex) {
             if (!measured) { sharp = Fingerprint.sharpness(canon); glare = Fingerprint.glare(canon); measured = true }
         }
 
-        // 1. Keypoints over the whole frame
-        if (useKeypoints && index.keypoints.size > 0) {
-            val ff = KeypointIndex.frameFeatures(gray, frameMaxSide, frameBudget)
-            try {
-                var hits = index.keypoints.detect(ff, gray.cols(), gray.rows(), maxCards)
-                // Second look: cards the outlines' fingerprints suggest, in case the rough
-                // keypoint shortlist missed them.
-                if (fp.size > 0 && outlines.isNotEmpty()) {
-                    val extra = LinkedHashSet<String>()
-                    for (o in outlines.take(3)) {
-                        if (hits.any { it.quad.iou(o.quad) > 0.5f }) continue
-                        val (rows, canon) = Fingerprint.queryDescriptors(gray, o.quad, floatArrayOf(1f))
-                        canon.release()
-                        fp.match(rows, 2).forEach { extra += it.key }
-                    }
-                    extra.removeAll(hits.map { it.key }.toSet())
-                    if (extra.isNotEmpty()) hits = hits + index.keypoints.detect(ff, gray.cols(), gray.rows(), maxCards, extra = extra, onlyExtra = true)
-                }
-                for (h in hits) kpSighting(gray, h, edgeMap)?.let { (s, canon) -> measure(canon); canon.release(); sightings += s }
-            } finally {
-                ff.release()
-            }
-        }
-
-        // 2. Outlines not already explained by a confident keypoint sighting
-        if (fp.size > 0) {
+        // 1. Outlines, the cheap look: a card whose edges show is named by its fingerprint and
+        // checked with keypoints between straightened images, in a fraction of the time it
+        // takes to search the whole frame.
+        val suggested = LinkedHashSet<String>()
+        val atlas = index.atlas
+        var atlasHits: List<AtlasHit> = emptyList()
+        if (fp.size > 0 || atlas != null) {
             var tried = 0
             for (o in outlines) {
                 if (tried >= 2) break
-                if (sightings.any { it.strength >= 0.5f && it.quad.iou(o.quad) > 0.5f }) continue
+                if (sightings.any { it.strength >= SURE && it.quad.iou(o.quad) > 0.5f }) continue
                 tried++
-                val (rows, canon) = Fingerprint.queryDescriptors(gray, o.quad)
+                val (rows, canon) = Prof.time("edgeDesc") { Fingerprint.queryDescriptors(gray, o.quad, ONE_SIZE) }
                 try {
                     measure(canon)
-                    val cands = fp.match(rows, 5)
-                    var best: Sighting? = null
-                    for ((m, inl) in fp.verify(canon, cands, 3)) {
+                    val cands = if (fp.size > 0) Prof.time("edgeMatch") { fp.match(rows, 5) } else emptyList()
+                    cands.take(2).forEach { suggested += it.key }
+                    fun marginOf(m: Match): Float {
                         val other = cands.filter { it.key != m.key }.maxOfOrNull { it.score }
-                        val margin = if (other != null) m.score - other else 0.5f
-                        // a close call between two cards on few matches is how card-like pictures
-                        // (a playmat, a poster) get mistaken for a card: not enough to go on
-                        val s = if (margin < 0.06f && inl < 30) 0f else edgeStrength(m.score, margin, inl)
-                        if (best == null || s > best.strength) best = Sighting(m.key, m.score, margin, inl, s, o.quad, cands, "edge", edgeMap?.sides(o.quad) ?: 4)
+                        return if (other != null) m.score - other else 0.5f
+                    }
+                    val checked = ArrayList<Pair<Match, Inliers>>(3)
+                    Prof.time("edgeVerify") {
+                        for (c in fp.verify(canon, cands, 3)) {
+                            checked += c
+                            // a clear lead that the keypoints back up: the rest can't beat it
+                            val margin = marginOf(c.first)
+                            if (margin >= CLOSE_CALL && c.second.art >= MIN_ART && edgeStrength(c.first.score, margin, c.second.all) >= SURE) break
+                        }
+                    }
+                    var best: Sighting? = null
+                    for ((m, found) in checked) {
+                        val inl = found.all
+                        val margin = marginOf(m)
+                        val rival = checked.filter { it.first !== m }.maxOfOrNull { it.second.all } ?: 0
+                        // A close call between two cards has to be settled by the keypoints: few of
+                        // them is how card-like pictures (a playmat, a poster) get mistaken for a
+                        // card, and cards of a set share a layout that alone gives dozens.
+                        val s = if (found.art < MIN_ART || (margin < CLOSE_CALL && (inl < 30 || inl < 1.5f * rival))) 0f else edgeStrength(m.score, margin, inl)
+                        if (best == null || s > best!!.strength) best = Sighting(m.key, m.score, margin, inl, s, o.quad, cands, "edge", edgeMap?.sides(o.quad) ?: 4, artInliers = found.art)
                     }
                     best?.let { sightings += it }
+                    if (atlas != null && (best?.strength ?: 0f) < SURE) {
+                        val found = Prof.time("atlas") { atlas.search(rows) }
+                        if ((found.firstOrNull()?.score ?: -1f) > (atlasHits.firstOrNull()?.score ?: -1f)) atlasHits = found
+                    }
                 } finally {
                     canon.release()
                 }
             }
-        } else if (outlines.isNotEmpty()) {
-            val canon = Fingerprint.warp(gray, outlines[0].quad)
-            measure(canon); canon.release()
+        }
+
+        // 2. Keypoints over the whole frame, when the outline didn't settle it: finds cards
+        // without visible edges and cards the fingerprints got wrong.
+        val sure = sightings.any { it.strength >= SURE }
+        if (!sure && useKeypoints && index.keypoints.size > 0) {
+            val ff = Prof.time("orb") { KeypointIndex.frameFeatures(gray, frameMaxSide, frameBudget) }
+            try {
+                var hits = Prof.time("detect") { index.keypoints.detect(ff, w, h, maxCards) }
+                // Second look: cards the outlines' fingerprints suggest, in case the rough
+                // keypoint shortlist missed them.
+                val extra = suggested - hits.map { it.key }.toSet()
+                if (extra.isNotEmpty() && hits.none { h1 -> outlines.any { h1.quad.iou(it.quad) > 0.5f } })
+                    hits = hits + Prof.time("second") { index.keypoints.detect(ff, w, h, maxCards, extra = extra, onlyExtra = true) }
+                Prof.time("kpCheck") { for (h1 in hits) kpSighting(gray, h1, edgeMap)?.let { (s, canon) -> measure(canon); canon.release(); sightings += s } }
+            } finally {
+                ff.release()
+            }
         }
 
         // 3. One sighting per physical card: the strongest wins where outlines overlap
@@ -136,7 +177,7 @@ class Recognizer(val index: CardIndex) {
         val kept = ArrayList<Sighting>()
         for (s in sightings) if (kept.none { it.quad.iou(s.quad) > 0.5f }) kept += s
         val main = kept.firstOrNull { it.strength > 0f }?.quad ?: outlines.firstOrNull()?.quad
-        return Analysis(outlines, kept, main, sharp, glare, (System.nanoTime() - t0) / 1_000_000)
+        return Analysis(outlines, kept, main, sharp, glare, (System.nanoTime() - t0) / 1_000_000, atlasHits)
     }
 
     /** A keypoint hit, double-checked against its card's fingerprint and scored. The corners
@@ -145,6 +186,13 @@ class Recognizer(val index: CardIndex) {
     private companion object {
         /** Keypoint sighting strength by how many of its outline's sides lie on edges (0..4). */
         val SIDE_FACTOR = floatArrayOf(0.3f, 0.5f, 0.85f, 1f, 1f)
+        /** A sighting this strong needs no second opinion in this frame. */
+        const val SURE = 0.5f
+        /** Fingerprint scores this close don't decide between two cards. */
+        const val CLOSE_CALL = 0.06f
+        /** Matches on the artwork a sighting needs: cards of a set share everything else. */
+        const val MIN_ART = 3
+        val ONE_SIZE = floatArrayOf(1f)
     }
 
     private fun kpSighting(gray: Mat, h: KpHit, edgeMap: EdgeMap?): Pair<Sighting, Mat>? {
@@ -169,10 +217,10 @@ class Recognizer(val index: CardIndex) {
         // neither: matches only in the artwork don't count (if a hand hides the text, the
         // outline path still sees the card), and few edges weaken the sighting, since a
         // low-contrast card can hide them.
-        val ruledOut = h.ySpan < 0.4f || (sides == 0 && h.ySpan < 0.6f)
+        val ruledOut = h.ySpan < 0.4f || (sides == 0 && h.ySpan < 0.6f) || h.artInliers < MIN_ART
         val spanF = if (h.ySpan < 0.5f) 0.8f else 1f
         val s = if (ruledOut) 0f else kpStrength(score, margin, h.inliers, h.spread) * SIDE_FACTOR[sides] * spanF
-        return Sighting(h.key, score, margin, h.inliers, s, quad, cands, "kp", sides, h.ySpan) to canon
+        return Sighting(h.key, score, margin, h.inliers, s, quad, cands, "kp", sides, h.ySpan, h.artInliers) to canon
     }
 }
 
@@ -184,8 +232,11 @@ object Guide {
     fun holds(q: Quad, w: Int, h: Int): Boolean =
         q.cx in 0.18f * w..0.82f * w && q.cy in 0.18f * h..0.82f * h && q.area > 0.06f * w * h &&
             // a picture of a card filling the whole background (a playmat, a poster on the
-            // wall) is bigger than a card held up to the camera, even one held at an angle
-            q.area < 0.93f * w * h
+            // wall) is bigger than a card held up to the camera: one filling the width of a
+            // 9:16 screen covers 79% of it, unless it pokes out past the edges of the frame
+            q.area < (if (inside(q, w, h)) 0.84f else 0.93f) * w * h
+
+    private fun inside(q: Quad, w: Int, h: Int): Boolean = (0 until 4).all { q.x(it) in 0f..w.toFloat() && q.y(it) in 0f..h.toFloat() }
 
     /** The sighting the scanner shows and reads: the strongest one held in the guide. */
     fun main(a: Analysis, w: Int, h: Int): Sighting? = a.sightings.firstOrNull { it.strength >= SHOW && holds(it.quad, w, h) }
@@ -205,6 +256,8 @@ class Tracker(
     /** A locked card that's unrecognised keeps its lock this long at most while something
      *  card-shaped stays in view (glare, blur; not a binder page sitting there for ever). */
     var holdMax: Double = 5.0,
+    /** How long after the locked card was last seen another card can take over. */
+    var swap: Double = 0.25,
 ) {
     private class Ev(var value: Float, var count: Int, var last: Double)
 
@@ -242,8 +295,10 @@ class Tracker(
         val best = ev.entries.filter { it.value.value >= threshold && it.value.count >= minSightings && now - it.value.last < 0.3 }
             .maxByOrNull { it.value.value } ?: return null
         if (best.key == locked) return null
-        // A locked card is only replaced by a clearly stronger different card.
-        if (locked != null && best.value.value < 1.5f * (ev[locked!!]?.value ?: 0f)) return null
+        // A locked card seen just now is probably still there (a blurred frame looking like some
+        // other card): only a clearly stronger card replaces it. A moment after it was last seen
+        // the next card counts at once: flipping through a stack mustn't wait for it to fade.
+        if (locked != null && now - lockedSighted < swap && best.value.value < 1.5f * (ev[locked!!]?.value ?: 0f)) return null
         locked = best.key
         lockedSeen = now
         lockedSighted = now

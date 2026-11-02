@@ -103,6 +103,8 @@ class CardSet(
     var code: String? = null
     /** TCGplayer's name for the set ("SV: Scarlet & Violet 151"), when known. */
     var tcgName: String? = null
+    /** `release` is only about right. */
+    var dateApprox = false
     /** Asian-language card lists from TCGdex that are missing their secret rares. */
     var incomplete = false
 

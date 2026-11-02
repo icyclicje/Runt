@@ -13,8 +13,8 @@ android {
         applicationId = "com.mivimoose.scanner"
         minSdk = 26
         targetSdk = 36
-        versionCode = 300
-        versionName = "3.0.0"
+        versionCode = 310
+        versionName = "3.1.0"
     }
 
     // One APK per CPU type keeps each one small: arm64 for phones, x86_64 for the emulator.

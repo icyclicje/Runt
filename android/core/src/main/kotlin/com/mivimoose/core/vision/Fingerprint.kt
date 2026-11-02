@@ -52,6 +52,19 @@ object Fingerprint {
         out
     }
 
+    /** One band of the card (y0..y1 as fractions of its height), straightened to width w. */
+    fun warpBand(gray: Mat, quad: Quad, w: Int, h: Int, y0: Float, y1: Float): Mat = matScope {
+        val top = -y0 * h.toDouble()
+        val dst = MatOfPoint2f(
+            org.opencv.core.Point(0.0, top), org.opencv.core.Point(w - 1.0, top),
+            org.opencv.core.Point(w - 1.0, top + h - 1.0), org.opencv.core.Point(0.0, top + h - 1.0),
+        ).track()
+        val m = Imgproc.getPerspectiveTransform(quad.toMat2f().track(), dst).track()
+        val out = Mat()
+        Imgproc.warpPerspective(gray, out, m, Size(w.toDouble(), ((y1 - y0) * h).toDouble()), Imgproc.INTER_LINEAR, Core.BORDER_REPLICATE)
+        out
+    }
+
     fun describe(canon: Mat): FloatArray = matScope {
         val h = canon.rows(); val w = canon.cols()
         val mx = (w * MARGIN).toInt(); val my = (h * MARGIN).toInt()

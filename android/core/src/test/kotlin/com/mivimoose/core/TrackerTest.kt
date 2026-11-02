@@ -44,6 +44,26 @@ class TrackerTest {
     }
 
     @Test
+    fun nextCardInAStackScansAtOnce() {
+        val r = Run(10.0)
+        r.frames(3.0, a, true)          // plenty of evidence for A
+        val before = r.t
+        var at = -1.0
+        repeat(20) { r.t += r.dt; r.tracker.update(r.t, b, true)?.let { c -> r.confirmed += c; if (at < 0) at = r.t } }
+        assertEquals(listOf("A", "B"), r.confirmed)
+        assert(at - before <= 0.4) { "B took ${at - before} s" }
+    }
+
+    @Test
+    fun blurredFrameWhileHeldIsNotAnotherCard() {
+        val r = Run(10.0)
+        r.frames(2.0, a, true)
+        // two frames looking like B, in between frames of A
+        repeat(3) { r.frames(0.1, a, true); r.frames(0.2, b, true) }
+        assertEquals(listOf("A"), r.confirmed)
+    }
+
+    @Test
     fun glareWhileHeldIsNotASecondScan() {
         val r = Run()
         r.frames(2.0, a, true)

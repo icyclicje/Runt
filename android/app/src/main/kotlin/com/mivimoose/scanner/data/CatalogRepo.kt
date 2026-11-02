@@ -5,6 +5,8 @@ import android.util.Log
 import com.mivimoose.core.catalog.BundleParser
 import com.mivimoose.core.catalog.Catalog
 import com.mivimoose.core.catalog.CardSet
+import com.mivimoose.core.catalog.Chinese
+import com.mivimoose.core.catalog.ChineseCards
 import com.mivimoose.core.catalog.Supplements
 import com.mivimoose.core.net.TcgPlayer
 import com.mivimoose.core.packs.PackModel
@@ -60,7 +62,56 @@ class CatalogRepo(private val ctx: Context, private val net: Net, private val tc
         }.getOrDefault(emptyMap())
         val c = cachedOrParse()
         val extra = imported.values.filter { it.id !in c.sets }
-        return withCodes(if (extra.isEmpty()) c else Catalog(c.sets.values + extra, c.updated))
+        val coded = withCodes(if (extra.isEmpty()) c else Catalog(c.sets.values + extra, c.updated))
+        chinese = readChinese()
+        return Chinese.merge(coded, chinese.values, runCatching { keepSets() }.getOrDefault(emptySet()))
+    }
+
+    /** Sets not to drop from the data because a card of them is in the collection. */
+    @Volatile var keepSets: () -> Set<String> = { emptySet() }
+    private var chinese: Map<String, Chinese.RawSet> = emptyMap()
+
+    /** Chinese card lists: those built into the app, updated by what was downloaded since. */
+    private fun readChinese(): Map<String, Chinese.RawSet> {
+        val out = LinkedHashMap<String, Chinese.RawSet>()
+        val builtIn = runCatching { ctx.assets.open("data/zh_sets.json").bufferedReader().readText() }.getOrNull()
+            ?: runCatching { GZIPInputStream(ctx.assets.open("data/zh_sets.json.gz")).bufferedReader().readText() }.getOrNull()
+        for (text in listOfNotNull(builtIn, File(dir, ZH_LIVE).takeIf { it.exists() }?.readText()))
+            runCatching { Chinese.fromJson(text) }.onFailure { Log.w(TAG, "chinese sets", it) }.getOrNull()?.forEach { out[it.id] = it }
+        return out
+    }
+
+    /** New Chinese sets and changed Simplified lists, once a day. */
+    private suspend fun importChinese() {
+        val c = _catalog.value ?: return
+        val last = File(dir, "zh.checked")
+        if (last.exists() && System.currentTimeMillis() - last.lastModified() < 24 * 3600_000L) return
+        val client = ChineseCards(net)
+        val fresh = ArrayList<Chinese.RawSet>()
+        runCatching {
+            for (e in client.twExpansions()) if ("zh-tw-${e.code}" !in c.sets) runCatching { client.twSet(e) }.getOrNull()?.let { fresh += it }
+        }.onFailure { Log.w(TAG, "Traditional Chinese sets", it) }
+        runCatching {
+            val versions = client.cnManifest()
+            val today = java.time.LocalDate.now().toString()
+            for (s in client.cnIndex()) {
+                val have = chinese["zh-cn-${s.id}"]
+                val version = versions[s.id]
+                if (have == null || (version != null && have.rev != version)) runCatching { client.cnSet(s, version, today) }.getOrNull()?.let { fresh += it }
+            }
+        }.onFailure { Log.w(TAG, "Simplified Chinese sets", it) }
+        last.writeText(System.currentTimeMillis().toString())
+        if (fresh.isEmpty()) return
+        Log.i(TAG, "chinese sets: ${fresh.map { it.id }}")
+        val file = File(dir, ZH_LIVE)
+        val saved = LinkedHashMap<String, Chinese.RawSet>()
+        if (file.exists()) runCatching { Chinese.fromJson(file.readText()) }.getOrNull()?.forEach { saved[it.id] = it }
+        fresh.forEach { saved[it.id] = it }
+        file.writeText(Chinese.toJson(saved.values))
+        lock.withLock {
+            publish(parseLocal())
+            setPricesAt.clear()                  // new card objects
+        }
     }
 
     /** The site data, from the binary cache when it matches the current download (fast start). */
@@ -130,6 +181,7 @@ class CatalogRepo(private val ctx: Context, private val net: Net, private val tc
         }
         if (imported.isEmpty()) runCatching { reloadImported() }.onFailure { Log.w(TAG, "imported sets", it) }
         runCatching { importNewSets() }.onFailure { Log.w(TAG, "new sets", it) }
+        runCatching { importChinese() }.onFailure { Log.w(TAG, "chinese sets", it) }
         _catalog.value?.let { _status.value = "${it.sets.size} sets · ${"%,d".format(it.cardCount)} cards" }
     }
 
@@ -222,5 +274,6 @@ class CatalogRepo(private val ctx: Context, private val net: Net, private val tc
     companion object {
         const val SITE = "https://mivimooserips-production-e1c1.up.railway.app"
         private const val TAG = "Catalog"
+        private const val ZH_LIVE = "zh_live.json"
     }
 }

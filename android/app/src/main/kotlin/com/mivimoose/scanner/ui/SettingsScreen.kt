@@ -142,7 +142,7 @@ fun SettingsScreen(vm: AppVM, nav: NavHostController) {
         Section("About") {
             Text("MivimooseRips ${BuildConfig.VERSION_NAME}", fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold)
             Text(
-                "Card data: the MivimooseRips site, TCGplayer's catalog (via tcgcsv.com) and TCGdex. Prices: TCGplayer market prices. " +
+                "Card data: the MivimooseRips site, TCGplayer's catalog (via tcgcsv.com), TCGdex, the official Trainers Website and tcg.mik.moe (Chinese cards). Prices: TCGplayer market prices. " +
                     "Graded data: PriceCharting. Pull rates: TCGplayer and community opening studies (sources shown per set). " +
                     "Pokémon and its trademarks belong to Nintendo, Creatures and GAME FREAK; this app is unofficial and for personal use.",
                 color = Vault.muted, fontSize = 12.sp,

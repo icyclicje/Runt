@@ -24,6 +24,8 @@ tasks.test {
     providers.gradleProperty("bench").orNull?.let { systemProperty("bench", it) }
     providers.gradleProperty("benchSets").orNull?.let { systemProperty("benchSets", it) }
     providers.gradleProperty("benchVerbose").orNull?.let { systemProperty("benchVerbose", it) }
+    providers.gradleProperty("benchSlow").orNull?.let { systemProperty("benchSlow", it) }
+    providers.gradleProperty("atlas").orNull?.let { systemProperty("atlas", it) }
     providers.gradleProperty("debugFrames").orNull?.let { systemProperty("debugFrames", it) }
     outputs.upToDateWhen { false }
     maxHeapSize = "3g"

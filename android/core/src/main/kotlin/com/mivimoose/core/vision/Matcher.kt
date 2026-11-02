@@ -29,7 +29,16 @@ class OrbFeatures(val pts: FloatArray, val desc: ByteArray) {
     }
 }
 
+/** Keypoints that agree between two straightened cards: all of them, and those on the artwork.
+ *  Cards of a set share their layout (footer, text box, symbols), which alone gives dozens of
+ *  matches between two different cards; only the same card matches on its artwork. */
+class Inliers(val all: Int, val art: Int)
+
 object Orb {
+    /** Where the artwork is on a card, as fractions of its height. */
+    const val ART_TOP = 0.10f
+    const val ART_BOTTOM = 0.55f
+
     private val orb = ThreadLocal.withInitial { ORB.create(500, 1.2f, 5, 12, 0, 2, ORB.HARRIS_SCORE, 17, 20) }
     private val bf = ThreadLocal.withInitial { BFMatcher.create(Core.NORM_HAMMING, false) }
 
@@ -49,8 +58,8 @@ object Orb {
 
     /** Geometrically consistent keypoint matches between two straightened cards. Both are
      *  the same size, so the right card lines up with a near-identity similarity transform. */
-    fun inliers(q: OrbFeatures, r: OrbFeatures): Int = matScope {
-        if (q.count < 8 || r.count < 8) return@matScope 0
+    fun inliers(q: OrbFeatures, r: OrbFeatures): Inliers = matScope {
+        if (q.count < 8 || r.count < 8) return@matScope Inliers(0, 0)
         val qd = q.descMat().track(); val rd = r.descMat().track()
         val pairs = ArrayList<MatOfDMatch>()
         bf.get().knnMatch(qd, rd, pairs, 2)
@@ -64,34 +73,36 @@ object Orb {
                 dst += Point(r.pts[2 * ti].toDouble(), r.pts[2 * ti + 1].toDouble())
             }
         }
-        if (src.size < 8) return@matScope src.size / 2
+        if (src.size < 8) return@matScope Inliers(src.size / 2, 0)
         val mask = mat()
         val a = Calib3d.estimateAffinePartial2D(
             MatOfPoint2f(*src.toTypedArray()).track(), MatOfPoint2f(*dst.toTypedArray()).track(), mask,
             Calib3d.RANSAC, 6.0, 300, 0.98, 10,
         ).track()
-        if (a.empty() || mask.empty()) return@matScope 0
+        if (a.empty() || mask.empty()) return@matScope Inliers(0, 0)
         val scale = hypot(a.get(0, 0)[0], a.get(1, 0)[0])
-        if (scale !in 0.85..1.18) return@matScope 0
+        if (scale !in 0.85..1.18) return@matScope Inliers(0, 0)
         // Both images are straightened cards, so the card's middle must land on the middle:
         // the same artwork on a poster or a pack sits somewhere else within its outline.
         val cx = CANON_W / 2.0; val cy = CANON_H / 2.0
         val mx = a.get(0, 0)[0] * cx + a.get(0, 1)[0] * cy + a.get(0, 2)[0]
         val my = a.get(1, 0)[0] * cx + a.get(1, 1)[0] * cy + a.get(1, 2)[0]
-        if (abs(mx - cx) > 0.12 * CANON_W || abs(my - cy) > 0.1 * CANON_H) return@matScope 0
+        if (abs(mx - cx) > 0.12 * CANON_W || abs(my - cy) > 0.1 * CANON_H) return@matScope Inliers(0, 0)
         val inl = Core.countNonZero(mask)
+        var art = 0
         // ...and isn't stretched one way: artwork cropped to a poster's shape is
         if (inl >= 6) {
             val m = ByteArray(mask.total().toInt()).also { mask.get(0, 0, it) }
             val si = src.indices.filter { it < m.size && m[it].toInt() != 0 }
+            art = si.count { dst[it].y >= ART_TOP * CANON_H && dst[it].y <= ART_BOTTOM * CANON_H }
             val full = Calib3d.estimateAffine2D(MatOfPoint2f(*si.map { src[it] }.toTypedArray()).track(),
                 MatOfPoint2f(*si.map { dst[it] }.toTypedArray()).track()).track()
             if (!full.empty()) {
                 val sx = hypot(full.get(0, 0)[0], full.get(1, 0)[0]); val sy = hypot(full.get(0, 1)[0], full.get(1, 1)[0])
-                if (max(sx, sy) / min(sx, sy).coerceAtLeast(1e-6) > 1.2) return@matScope 0
+                if (max(sx, sy) / min(sx, sy).coerceAtLeast(1e-6) > 1.2) return@matScope Inliers(0, 0)
             }
         }
-        inl
+        Inliers(inl, art)
     }
 }
 
@@ -117,10 +128,11 @@ class RefCard(val key: String, val desc: FloatArray, val canon: ByteArray, val k
 class CardIndex {
     val fingerprints = FingerprintIndex()
     val keypoints = KeypointIndex()
+    /** Every card in the catalog, built into the app. */
+    @Volatile var atlas: Atlas? = null
     @Volatile var keys: Set<String> = emptySet(); private set
     val size get() = fingerprints.size
 
-    @Synchronized
     fun load(refs: Collection<RefCard>) {
         fingerprints.load(refs)
         keypoints.load(refs)
@@ -135,17 +147,15 @@ class Match(val key: String, val score: Float, val row: Int)
  * products, plus ORB keypoint checks between straightened images.
  */
 class FingerprintIndex {
-    var keys: Array<String> = emptyArray(); private set
-    private var desc = FloatArray(0)
-    private var mu: FloatArray? = null
-    private val canon = HashMap<String, ByteArray>()
-    private var pos: Map<String, Int> = emptyMap()
+    /** One pool of cards. Replaced as a whole: frames go on being analysed during a reload. */
+    private class Pool(val keys: Array<String>, val desc: FloatArray, val mu: FloatArray?, val canon: Map<String, ByteArray>, val pos: Map<String, Int>)
+    @Volatile private var pool = Pool(emptyArray(), FloatArray(0), null, emptyMap(), emptyMap())
     private val featCache = object : LinkedHashMap<String, OrbFeatures>(256, 0.75f, true) {
         override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, OrbFeatures>?) = size > 1500
     }
-    val size get() = keys.size
+    val keys: Array<String> get() = pool.keys
+    val size get() = pool.keys.size
 
-    @Synchronized
     fun load(refs: Collection<RefCard>) {
         val d = Fingerprint.DIM
         val n = refs.size
@@ -154,34 +164,34 @@ class FingerprintIndex {
         // Every card shares the same layout (border, text box, HP bar...). Removing the
         // average fingerprint leaves what makes each card different, which widens the gap
         // between the right card and look-alikes.
-        mu = if (n >= 8) FloatArray(d) { j -> var s = 0f; for (i in 0 until n) s += raw[i * d + j]; s / n } else null
-        for (i in 0 until n) center(raw, i * d)
-        desc = raw
-        keys = refs.map { it.key }.toTypedArray()
-        pos = keys.withIndex().associate { it.value to it.index }
-        canon.clear()
+        val mu = if (n >= 8) FloatArray(d) { j -> var s = 0f; for (i in 0 until n) s += raw[i * d + j]; s / n } else null
+        for (i in 0 until n) center(raw, i * d, mu)
+        val keys = refs.map { it.key }.toTypedArray()
+        val canon = HashMap<String, ByteArray>(n * 2)
         refs.forEach { canon[it.key] = it.canon }
+        pool = Pool(keys, raw, mu, canon, keys.withIndex().associate { it.value to it.index })
         synchronized(featCache) { featCache.keys.retainAll(canon.keys) }
     }
 
-    fun contains(key: String) = canon.containsKey(key)
+    fun contains(key: String) = pool.canon.containsKey(key)
 
     /** Fingerprint score of one particular card for a query (best row). */
     fun scoreFor(query: Array<FloatArray>, key: String): Float {
-        val i = pos[key] ?: return 0f
+        val p = pool
+        val i = p.pos[key] ?: return 0f
         val d = Fingerprint.DIM
         var best = -2f
         for (r in query) {
-            val q = r.copyOf().also { center(it, 0) }
+            val q = r.copyOf().also { center(it, 0, p.mu) }
             var s = 0f
-            for (j in 0 until d) s += q[j] * desc[i * d + j]
+            for (j in 0 until d) s += q[j] * p.desc[i * d + j]
             if (s > best) best = s
         }
         return best
     }
 
-    private fun center(v: FloatArray, at: Int) {
-        val m = mu ?: return
+    private fun center(v: FloatArray, at: Int, m: FloatArray?) {
+        if (m == null) return
         var n = 0.0
         for (j in m.indices) { v[at + j] -= m[j]; n += v[at + j] * v[at + j] }
         val s = (1.0 / (sqrt(n) + 1e-6)).toFloat()
@@ -190,10 +200,11 @@ class FingerprintIndex {
 
     /** Best `topk` cards for a query (several fingerprint rows; the best row counts). */
     fun match(query: Array<FloatArray>, topk: Int = 5): List<Match> {
-        val keys = keys; val desc = desc
+        val p = pool
+        val keys = p.keys; val desc = p.desc
         if (keys.isEmpty()) return emptyList()
         val d = Fingerprint.DIM
-        val q = query.map { r -> r.copyOf().also { center(it, 0) } }
+        val q = query.map { r -> r.copyOf().also { center(it, 0, p.mu) } }
         val best = FloatArray(keys.size) { -2f }
         val bestRow = IntArray(keys.size)
         for (i in keys.indices) {
@@ -209,7 +220,7 @@ class FingerprintIndex {
 
     fun refFeatures(key: String): OrbFeatures? {
         synchronized(featCache) { featCache[key]?.let { return it } }
-        val c = canon[key] ?: return null
+        val c = pool.canon[key] ?: return null
         val m = Mat(CANON_H, CANON_W, CvType.CV_8UC1)
         m.put(0, 0, c)
         val f = Orb.features(m)
@@ -218,8 +229,9 @@ class FingerprintIndex {
         return f
     }
 
-    /** Keypoint inliers for the top candidates, in the orientation the fingerprint chose. */
-    fun verify(qCanon: Mat, cands: List<Match>, n: Int = 3): List<Pair<Match, Int>> {
+    /** Keypoint inliers for the top candidates, in the orientation the fingerprint chose;
+     *  one by one, so a clear first answer saves checking the others. */
+    fun verify(qCanon: Mat, cands: List<Match>, n: Int = 3): Sequence<Pair<Match, Inliers>> {
         val feats = HashMap<Boolean, OrbFeatures>()
         fun q(upsideDown: Boolean) = feats.getOrPut(upsideDown) {
             if (!upsideDown) Orb.features(qCanon) else {
@@ -227,9 +239,9 @@ class FingerprintIndex {
                 Orb.features(r).also { r.release() }
             }
         }
-        return cands.take(n).map { m ->
+        return cands.take(n).asSequence().map { m ->
             val rf = refFeatures(m.key)
-            m to (if (rf == null) 0 else Orb.inliers(q(m.row % 2 == 1), rf))
+            m to (if (rf == null) Inliers(0, 0) else Orb.inliers(q(m.row % 2 == 1), rf))
         }
     }
 }

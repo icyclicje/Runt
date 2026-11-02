@@ -73,7 +73,18 @@ object TextMatch {
                 numbers += CollectorNumber(m.groupValues[2], prefix, l.top > 0.7f)
             }
             if (hp == null) HP_RE.find(l.text)?.let { hp = (it.groupValues[1].ifEmpty { it.groupValues[2] }).toIntOrNull() }
-            if (l.top > 0.75f) for (w in WORD_RE.findAll(l.text)) codes += w.value.uppercase()
+        }
+        // The set code is printed next to the collector number. Without one read, only the
+        // very bottom of the card counts: the rules text above it is full of short words
+        val numberLines = lines.filter { l -> l.top > 0.75f && NUM_RE.containsMatchIn(fixDigits(l.text)) }
+        for (l in lines) {
+            val onNumberLine = numberLines.any { n -> kotlin.math.abs((l.top + l.bottom) / 2 - (n.top + n.bottom) / 2) < 0.015f }
+            if (onNumberLine || (numberLines.isEmpty() && l.top > 0.92f)) for (w in WORD_RE.findAll(l.text)) {
+                val u = w.value.uppercase()
+                codes += u
+                // "MEW EN" read without its space
+                if (u.length >= 4 && u.endsWith("EN")) codes += u.dropLast(2)
+            }
         }
         numbers.sortByDescending { it.bottom }
         val names = lines.filter { it.top < 0.2f && it.text.length >= 2 }
@@ -194,8 +205,9 @@ object TextMatch {
      * Cards the text could belong to, best first. Name, collector number (exact or one
      * character off), printed set size and set code are scored together, so one misread
      * field doesn't lead astray: ~1 means everything agrees, ~0.6 name plus set size.
+     * `looks`: how much each card's artwork looks like what's in the guide adds to its score.
      */
-    fun candidates(clues: TextClues, catalog: Catalog, preferredSets: Set<String> = emptySet(), limit: Int = 8): List<TextCandidate> {
+    fun candidates(clues: TextClues, catalog: Catalog, preferredSets: Set<String> = emptySet(), limit: Int = 8, looks: Map<String, Float> = emptyMap()): List<TextCandidate> {
         if (clues.isEmpty) return emptyList()
         val codeSets = clues.codes.flatMap { catalog.byCode[it] ?: emptyList() }.map { it.id }.toSet()
         val readNums = clues.numbers.map { Catalog.normNumber(it.number) }.distinct()
@@ -237,10 +249,12 @@ object TextMatch {
             if (clues.script == null && set.lang == "en") score += 0.03f
             if (clues.script == null && set.lang == "id") score -= 0.08f
             if (c.setId in preferredSets) score += 0.05f
+            val look = looks[c.key] ?: 0f
+            score += look
             // ties (e.g. a name read without its number) lean towards newer sets: what people open
             score += 0.02f * ((set.year - 1999).coerceIn(0, 27) / 27f)
             val why = listOfNotNull(if (ns >= 0.75f) "name" else null, if (numExact) "number" else if (numNear) "number~" else null,
-                if (tOk) "set size" else null, if (codeOk) "set code" else null).joinToString("+")
+                if (tOk) "set size" else null, if (codeOk) "set code" else null, if (look > 0f) "art" else null).joinToString("+")
             out += TextCandidate(c, score.coerceIn(0f, 1f), why)
         }
         return out.sortedByDescending { it.score }.distinctBy { it.card.key }.take(limit)

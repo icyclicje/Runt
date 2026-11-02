@@ -10,6 +10,7 @@ import androidx.camera.core.FocusMeteringAction
 import androidx.camera.core.ImageAnalysis
 import androidx.camera.core.ImageProxy
 import androidx.camera.core.Preview
+import androidx.camera.core.SurfaceOrientedMeteringPointFactory
 import androidx.camera.core.resolutionselector.AspectRatioStrategy
 import androidx.camera.core.resolutionselector.ResolutionSelector
 import androidx.camera.core.resolutionselector.ResolutionStrategy
@@ -79,11 +80,17 @@ fun CameraFeed(engine: ScanEngine, torch: Boolean, modifier: Modifier = Modifier
                     }
                 }
                 p.unbindAll()
-                camera = p.bindToLifecycle(owner, CameraSelector.DEFAULT_BACK_CAMERA, preview, analysis)
-                onCamera(camera)
+                val bound = p.bindToLifecycle(owner, CameraSelector.DEFAULT_BACK_CAMERA, preview, analysis)
+                camera = bound
+                onCamera(bound)
+                // Focus on the middle of the picture, where the card is held, when it's blurry there
+                val middle = SurfaceOrientedMeteringPointFactory(1f, 1f).createPoint(0.5f, 0.5f)
+                engine.onBlurry = {
+                    runCatching { bound.cameraControl.startFocusAndMetering(FocusMeteringAction.Builder(middle, FocusMeteringAction.FLAG_AF).build()) }
+                }
             }.onFailure { Log.e("Camera", "bind", it) }
         }, ContextCompat.getMainExecutor(ctx))
-        onDispose { provider?.unbindAll(); executor.shutdown(); onCamera(null) }
+        onDispose { engine.onBlurry = null; provider?.unbindAll(); executor.shutdown(); onCamera(null) }
     }
     LaunchedEffect(torch, camera) { camera?.cameraControl?.enableTorch(torch) }
     AndroidView({ view }, modifier.pointerInput(Unit) {
@@ -160,58 +167,68 @@ fun FileFeed(engine: ScanEngine, dir: String, modifier: Modifier = Modifier) {
 
 /**
  * Benchmark mode: every sub-folder with a truth.json is one sequence (a card brought up,
- * held and taken away). Each is played once in real time from a cold start, in price-check
- * mode, and what the scanner confirmed is logged ("BENCH" in logcat).
+ * held and taken away), filmed at 20 fps. Each is played once in real time from a cold start,
+ * in price-check mode: frames that go by while one is being analysed are skipped, as with a
+ * real camera. What the scanner confirmed, and how long after the card was held, is logged
+ * ("BENCH" in logcat). With a file named "cold" in the folder all card images are forgotten and
+ * no whole sets load, so every card is seen for the first time, as when a binder is scanned.
  */
 private suspend fun bench(engine: ScanEngine, root: File, show: (Bitmap) -> Unit) {
     val prefs = com.mivimoose.scanner.Graph.prefs
     val oldAuto = prefs.value.autoAdd
     prefs.update { it.copy(autoAdd = false) }
     com.mivimoose.scanner.Graph.store.clearScans()
+    if (File(root, "cold").exists()) com.mivimoose.scanner.Graph.refs.let { it.clear(); it.noSets = true }
     engine.autoSet()
     val seqs = root.listFiles()!!.filter { File(it, "truth.json").exists() }.sortedBy { it.name }
     var ok = 0; var wrong = 0; var n = 0; var doubles = 0
     var negFrames = 0; var negShown = 0          // non-card objects outlined as a card
-    val delays = ArrayList<Int>()
+    val delays = ArrayList<Long>()
+    val frameMs = ArrayList<Long>()
+    com.mivimoose.core.vision.Prof.reset()
     for (d in seqs) {
         val truth = org.json.JSONObject(File(d, "truth.json").readText())
         val key = truth.getString("key")
         val held = truth.getJSONArray("held")
         val firstHeld = (0 until held.length()).first { held.getBoolean(it) }
         engine.resetForBench()
-        val got = ArrayList<Pair<String, Int>>()
-        var frame = 0
-        val job = kotlinx.coroutines.CoroutineScope(Dispatchers.Default).launch { engine.results.collect { got += it.card.key to (frame - firstHeld) } }
+        val got = java.util.Collections.synchronizedList(ArrayList<Pair<String, Long>>())
         val files = d.listFiles { f -> f.name.endsWith(".jpg") }!!.sortedBy { it.name }
-        var t = 0.0
-        for ((i, f) in files.withIndex()) {
-            frame = i
-            val b = withContext(Dispatchers.IO) { BitmapFactory.decodeFile(f.path) } ?: continue
-            show(b)
+        val start = System.nanoTime()
+        fun elapsed() = (System.nanoTime() - start) / 1_000_000
+        val job = kotlinx.coroutines.CoroutineScope(Dispatchers.Default).launch { engine.results.collect { got += it.card.key to (elapsed() - firstHeld * 50L) } }
+        var last = -1
+        while (true) {
+            val i = (elapsed() / 50).toInt()
+            if (i >= files.size) break
+            if (i == last) { delay(5); continue }
+            last = i
+            val b = withContext(Dispatchers.IO) { BitmapFactory.decodeFile(files[i].path) } ?: continue
+            if (i % 8 == 0) show(b)
             val t0 = System.nanoTime()
             withContext(Dispatchers.Default) {
                 val rgba = Mat(); val gray = Mat()
                 Utils.bitmapToMat(b, rgba); Imgproc.cvtColor(rgba, gray, Imgproc.COLOR_RGBA2GRAY)
-                engine.onFrame(gray, t); rgba.release(); gray.release()
+                engine.onFrame(gray, elapsed() / 1000.0); rgba.release(); gray.release()
             }
+            frameMs += (System.nanoTime() - t0) / 1_000_000
             if (key.isEmpty()) { negFrames++; if (engine.live.value.quad != null) negShown++ }
-            val ms = (System.nanoTime() - t0) / 1_000_000
-            t += maxOf(ms, 66L) / 1000.0
-            delay(maxOf(0L, 66L - ms))
         }
         delay(300)
         job.cancel()
         n++
         val mine = got.filter { it.first == key }
         val others = got.filter { it.first != key }
-        if (mine.isNotEmpty()) { ok++; delays += mine.first().second }
+        if (mine.isNotEmpty()) { ok++; delays += mine.first().second.coerceAtLeast(0) }
         if (mine.size > 1) doubles++
         wrong += others.size
         Log.i("BENCH", "${d.name} ${truth.getString("name")} #${truth.getString("number")}: " +
-            (if (mine.isNotEmpty()) "ok +${mine.first().second}f" else "MISSED") + (if (others.isNotEmpty()) " FALSE ${others.map { it.first }}" else ""))
+            (if (mine.isNotEmpty()) "ok ${mine.first().second.coerceAtLeast(0)} ms" else "MISSED") + (if (others.isNotEmpty()) " FALSE ${others.map { it.first }}" else ""))
     }
-    delays.sort()
-    Log.i("BENCH", "SUMMARY ${root.name}: scanned $ok/$n, false $wrong, double $doubles, median delay ${delays.getOrNull(delays.size / 2)} frames" +
+    delays.sort(); frameMs.sort()
+    Log.i("BENCH", "SUMMARY ${root.name}: scanned $ok/$n, false $wrong, double $doubles, time to scan median ${delays.getOrNull(delays.size / 2)} ms, p90 ${delays.getOrNull(delays.size * 9 / 10)} ms" +
         if (negFrames > 0) ", non-cards outlined in $negShown/$negFrames frames" else "")
+    Log.i("BENCH", "frame median ${frameMs.getOrNull(frameMs.size / 2)} ms, p90 ${frameMs.getOrNull(frameMs.size * 9 / 10)} ms; " + com.mivimoose.core.vision.Prof.report(frameMs.size))
+    com.mivimoose.scanner.Graph.refs.noSets = false
     prefs.update { it.copy(autoAdd = oldAuto) }
 }

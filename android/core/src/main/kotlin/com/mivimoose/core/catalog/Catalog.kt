@@ -15,6 +15,8 @@ class Catalog(setList: List<CardSet>, val updated: String) {
             compareBy<CardSet> { langs.indexOf(it.lang).let { i -> if (i < 0) 99 else i } }
                 .thenBy { it.series == promo }
                 .thenByDescending { seriesRank[it.lang to it.series] ?: "" }
+                // two series with the same newest release must not interleave
+                .thenBy { it.series }
                 .thenByDescending { it.release }.thenBy { it.name },
         ).map { it.id }
     }

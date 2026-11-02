@@ -38,21 +38,29 @@ class EdgeMap(val pts: FloatArray, val scale: Float) {
  */
 object CardFinder {
     const val WORK_SIZE = 640
+    private const val GOOD_OUTLINE = 0.5f
+    private const val CONTRAST_EVERY = 6
+    @Volatile private var contrast = 90f
+    @Volatile private var contrastAge = 0
 
-    fun find(gray: Mat, maxCandidates: Int = 5, minArea: Float = 0.02f, edgesOut: MutableList<EdgeMap>? = null): List<Outline> = matScope {
+    /** `keep`: which outlines matter (in frame pixels); the search stops at the first good one. */
+    fun find(gray: Mat, maxCandidates: Int = 5, minArea: Float = 0.02f, edgesOut: MutableList<EdgeMap>? = null, keep: (Quad) -> Boolean = { true }): List<Outline> = matScope {
         val h = gray.rows(); val w = gray.cols()
         val scale = if (max(h, w) > WORK_SIZE) WORK_SIZE.toFloat() / max(h, w) else 1f
-        val small = if (scale != 1f) mat().also { Imgproc.resize(gray, it, Size(), scale.toDouble(), scale.toDouble(), Imgproc.INTER_AREA) } else gray
+        val small = if (scale != 1f) mat().also { m -> Prof.time("f.resize") { Imgproc.resize(gray, m, Size(), scale.toDouble(), scale.toDouble(), Imgproc.INTER_AREA) } } else gray
         val sh = small.rows(); val sw = small.cols()
         val frameArea = (sh * sw).toFloat()
         val blur = mat()
         Imgproc.GaussianBlur(small, blur, Size(5.0, 5.0), 0.0)
-
-        val gx = mat(); val gy = mat(); val mag = mat()
-        Imgproc.Sobel(blur, gx, CvType.CV_32F, 1, 0, 3)
-        Imgproc.Sobel(blur, gy, CvType.CV_32F, 0, 1, 3)
-        Core.magnitude(gx, gy, mag)
-        val hiAuto = percentile(mag, 0.9f).coerceIn(24f, 400f)
+        // The picture's contrast changes slowly and measuring it is half the work: now and then will do
+        if (contrastAge++ % CONTRAST_EVERY == 0) contrast = Prof.time("f.grad") {
+            val gx = mat(); val gy = mat(); val mag = mat()
+            Imgproc.Sobel(blur, gx, CvType.CV_32F, 1, 0, 3)
+            Imgproc.Sobel(blur, gy, CvType.CV_32F, 0, 1, 3)
+            Core.magnitude(gx, gy, mag)
+            percentile(mag, 0.9f).coerceIn(24f, 400f)
+        }
+        val hiAuto = contrast
         val passes = arrayOf(floatArrayOf(0.35f * hiAuto, hiAuto), floatArrayOf(30f, 90f), floatArrayOf(60f, 170f))
 
         val kernel = Imgproc.getStructuringElement(Imgproc.MORPH_RECT, Size(3.0, 3.0)).track()
@@ -60,22 +68,26 @@ object CardFinder {
         var edgePts: FloatArray? = null
         val edges = mat()
         for (pass in passes) {
-            Imgproc.Canny(blur, edges, pass[0].toDouble(), pass[1].toDouble(), 3, true)
-            if (edgePts == null) edgePts = nonZero(edges)
-            Imgproc.morphologyEx(edges, edges, Imgproc.MORPH_CLOSE, kernel, Point(-1.0, -1.0), 2)
+            Prof.time("f.canny") {
+                Imgproc.Canny(blur, edges, pass[0].toDouble(), pass[1].toDouble(), 3, true)
+                if (edgePts == null) edgePts = nonZero(edges)
+                Imgproc.morphologyEx(edges, edges, Imgproc.MORPH_CLOSE, kernel, Point(-1.0, -1.0), 2)
+            }
             val contours = ArrayList<MatOfPoint>()
             val hier = mat()
-            Imgproc.findContours(edges, contours, hier, Imgproc.RETR_LIST, Imgproc.CHAIN_APPROX_SIMPLE)
+            Prof.time("f.contours") { Imgproc.findContours(edges, contours, hier, Imgproc.RETR_LIST, Imgproc.CHAIN_APPROX_SIMPLE) }
             for (cnt in contours) {
                 try {
                     val area = Imgproc.contourArea(cnt)
                     if (area < minArea * frameArea || area > 0.97 * frameArea) continue
                     val q = quadFromContour(cnt, frameArea) ?: continue
-                    cands += q
+                    if (keep(q.quad.scaled(1f / scale))) cands += q
                 } finally {
                     cnt.release()
                 }
             }
+            // A clean card-shaped outline: the stricter edge passes wouldn't add anything
+            if (cands.any { it.score >= GOOD_OUTLINE }) break
         }
         edgesOut?.add(EdgeMap(edgePts ?: FloatArray(0), scale))
 
@@ -92,10 +104,12 @@ object CardFinder {
         // the recogniser picks whichever matches better.
         val refined = ArrayList<Outline>()
         val pts = edgePts ?: FloatArray(0)
-        for (c in out) {
-            val r = if (pts.isNotEmpty()) refine(c.quad, pts) else c.quad
-            refined += Outline(r, c.score)
-            if (r.maxDist(c.quad) > 0.006f * max(sh, sw)) refined += Outline(c.quad, c.score * 0.98f)
+        Prof.time("f.refine") {
+            for (c in out) {
+                val r = if (pts.isNotEmpty()) refine(c.quad, pts) else c.quad
+                refined += Outline(r, c.score)
+                if (r.maxDist(c.quad) > 0.006f * max(sh, sw)) refined += Outline(c.quad, c.score * 0.98f)
+            }
         }
         refined.map { Outline(it.quad.scaled(1f / scale), it.score) }
     }
@@ -252,7 +266,8 @@ object CardFinder {
         val n = (m.total() * m.channels()).toInt()
         val all = FloatArray(n)
         m.get(0, 0, all)
-        val step = max(1, n / 60000)
+        // a few thousand samples pin down a percentile; sorting all of them is what took the time
+        val step = max(1, n / 4000)
         val sample = FloatArray((n + step - 1) / step) { all[it * step] }
         sample.sort()
         return sample[((sample.size - 1) * q).toInt()]

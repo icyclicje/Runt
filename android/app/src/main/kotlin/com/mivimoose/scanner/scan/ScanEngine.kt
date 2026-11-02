@@ -4,8 +4,10 @@ import android.graphics.Bitmap
 import android.util.Log
 import com.mivimoose.core.catalog.Card
 import com.mivimoose.core.catalog.Catalog
+import com.mivimoose.core.text.OcrLine
 import com.mivimoose.core.text.TextCandidate
 import com.mivimoose.core.text.TextMatch
+import com.mivimoose.core.vision.AtlasHit
 import com.mivimoose.core.vision.Fingerprint
 import com.mivimoose.core.vision.Guide
 import com.mivimoose.core.vision.Quad
@@ -113,8 +115,24 @@ class ScanEngine {
     private var ocrScript = "en"
     @Volatile private var textCands: List<TextCandidate> = emptyList()
     @Volatile private var textAt = 0L
-    /** The last text read was laid out like a card (a collector number along the bottom). */
+    /** The last text read was laid out like a card (a collector number along the bottom), or
+     *  named what the card in the guide looks like. */
     @Volatile private var textCardLike = false
+    /** What the built-in index thought the card in the guide is, over the last moments: only
+     *  some frames show the card sharply enough to name it. Card key to (how sure, when). */
+    private val looksLike = java.util.concurrent.ConcurrentHashMap<String, Pair<Float, Long>>()
+    @Volatile private var looksLang: String? = null
+    private var lastTop: Set<Int> = emptySet()
+    private val fetched = HashSet<String>()
+    /** What script the card's text was last read in ("latin", or "ja", "ko", "zh", "th"): a
+     *  print in another language has the same artwork, so only its text tells them apart. */
+    @Volatile private var textLang: String? = null
+    @Volatile private var textLangAt = 0L
+    private var langWaitSince = 0L
+    /** The card the text keeps naming and the card's looks agree with, since when: without a
+     *  connection to check its image, that has to do after a moment. */
+    private var namedKey = ""
+    private var namedSince = 0L
 
     private val _live = MutableStateFlow(LiveScan())
     val live: StateFlow<LiveScan> = _live
@@ -133,7 +151,41 @@ class ScanEngine {
         // The camera just came back: a card still in front of it counts as the same card.
         session.lastSeenAt = System.currentTimeMillis()
         publishPack()
+        Graph.refs.loadAtlas()
         updatePool()
+        warmUp()
+    }
+
+    /** The first frames and the first text read are the slowest: right after an install the code
+     *  isn't optimised yet, and the reader's models aren't loaded. Get that done before the first
+     *  card arrives, on something card-shaped that nothing can be scanned from. */
+    private fun warmUp() {
+        Lasting.launch {
+            val t0 = System.currentTimeMillis()
+            try {
+                val frame = Mat(1920, 1080, org.opencv.core.CvType.CV_8UC1)
+                org.opencv.core.Core.randu(frame, 0.0, 255.0)
+                // (blurred: sharp noise is all edges, far more work than any real picture)
+                Imgproc.GaussianBlur(frame, frame, org.opencv.core.Size(15.0, 15.0), 0.0)
+                Imgproc.rectangle(frame, org.opencv.core.Point(250.0, 500.0), org.opencv.core.Point(830.0, 1310.0), org.opencv.core.Scalar(230.0), 12)
+                // (a slow phone has better things to do with its time: the camera's frames)
+                repeat(WARM_FRAMES) { if (System.currentTimeMillis() - t0 < WARM_MS) rec.analyze(frame) }
+                frame.release()
+                val bmp = Bitmap.createBitmap(400, 120, Bitmap.Config.ARGB_8888)
+                android.graphics.Canvas(bmp).apply {
+                    drawColor(android.graphics.Color.WHITE)
+                    drawText("Pikachu 25/102", 20f, 70f, android.graphics.Paint().apply { textSize = 40f })
+                }
+                ocr.read(bmp, "en")
+                // the Japanese reader is big: only for those scanning cards it reads
+                val c = Graph.catalog.catalog.value
+                val asian = Graph.prefs.value.scanLanguage.let { it == "ja" || it.startsWith("zh") || it == "ko" } ||
+                    Graph.store.scans(10).any { s -> c?.card(s.cardKey)?.lang.let { it != null && it != "en" && it != "id" } }
+                if (asian) ocr.read(bmp, "ja")
+                bmp.recycle()
+                Log.i(TAG, "warmed up in ${System.currentTimeMillis() - t0} ms")
+            } catch (e: Exception) { Log.w(TAG, "warm up", e) }
+        }
     }
 
     /** Recognition pool: the set being scanned (all of it), plus the sets of recent scans. */
@@ -173,17 +225,22 @@ class ScanEngine {
         // Only the card held in the guide counts, not cards lying around it on the table.
         for (s in a.sightings) if (s.strength > 0f && Guide.holds(s.quad, w, h)) sightings[s.key] = maxOf(sightings[s.key] ?: 0f, s.strength)
 
+        if (a.suggested.isNotEmpty()) {
+            remember(c, a.suggested)
+            fetchLikely(c, a.suggested)
+        }
         // Card text: when there's a card but vision isn't sure (or the pool doesn't have it).
         val quad = a.sightings.firstOrNull { it.strength > 0f && Guide.holds(it.quad, w, h) }?.quad
             ?: a.outlines.firstOrNull { Guide.holds(it.quad, w, h) }?.quad
-        val visualSure = a.sightings.firstOrNull()?.let { it.strength >= 0.55f } ?: false
         val now = System.currentTimeMillis()
+        val unsettled = checkLanguage(c, sightings, now)
+        val visualSure = !unsettled && a.sightings.firstOrNull()?.let { it.strength >= 0.55f } ?: false
         // The guide stayed empty for a moment: whatever comes next is another card, even a second
         // copy of the last one. (Not one blurred frame: that can happen while a card is held.)
         if (quad != null || sightings.isNotEmpty()) session.emptySince = 0L
         else {
             if (session.emptySince == 0L) session.emptySince = now
-            if (now - session.emptySince >= EMPTY_MS) { session.emptyAt = now; tracker.unlock() }
+            if (now - session.emptySince >= EMPTY_MS) { session.emptyAt = now; tracker.unlock(); looksLang = null; textLang = null }
         }
         if (sightings.containsKey(session.lastKey)) session.lastSeenAt = now
         // What's outlined on screen: only something known to be a card (recognised by sight,
@@ -193,19 +250,25 @@ class ScanEngine {
         // No outline (card filling the frame, corners cut off, low contrast): read the guide box,
         // where the scanner asks you to hold the card.
         val textQuad = quad?.takeIf { it.area > 0.06f * w * h } ?: Quad.guide(w, h, 0.72f)
-        val coldStart = Graph.refs.index.size == 0
-        if (!visualSure && Graph.prefs.value.ocr && now - lastOcr > (if (coldStart) 300 else 450) && ocrBusy.compareAndSet(false, true)) {
+        // A card in the guide is read over and over until it's known; the empty guide box only now and then.
+        val onCard = textQuad === quad
+        // (The card just scanned, still there, is read no further.)
+        val scanned = tracker.locked != null && now - session.lastSeenAt < SETTLED_MS
+        if (!visualSure && !scanned && Graph.prefs.value.ocr && (onCard || now - lastOcr > 450) && ocrBusy.compareAndSet(false, true)) {
             lastOcr = now
-            val bmp = cardBitmap(gray, textQuad)
-            val onCard = textQuad === quad
-            scope.launch { try { readText(bmp, c, onCard) } finally { bmp.recycle(); ocrBusy.set(false) } }
+            val bmp = try { if (onCard) stripsBitmap(gray, textQuad) else cardBitmap(gray, textQuad) } catch (e: Exception) { ocrBusy.set(false); throw e }
+            // not cancelled with the scanner: the text reader may still be using the image
+            Lasting.launch { try { readText(bmp, c, onCard) } finally { bmp.recycle(); ocrBusy.set(false) } }
         }
         // Recent strong text reads count as sightings too.
         if (textCardLike && now - textAt < 1200) textCands.firstOrNull()?.let { tc ->
             val second = textCands.getOrNull(1)?.score ?: 0f
             if (tc.score >= 0.7f && tc.score - second >= 0.08f) {
-                val st = ((tc.score - 0.55f) * 2f).coerceIn(0.3f, 0.95f)
+                val st = ((tc.score - 0.55f) * 3f).coerceIn(0.3f, 0.95f)
                 sightings[tc.card.key] = maxOf(sightings[tc.card.key] ?: 0f, st)
+            } else if (tc.score >= 0.55f && looksLike.containsKey(tc.card.key)) {
+                if (tc.card.key != namedKey) { namedKey = tc.card.key; namedSince = now }
+                else if (now - namedSince > NAMED_MS) sightings[tc.card.key] = maxOf(sightings[tc.card.key] ?: 0f, 0.8f)
             }
         }
         val confirmed = tracker.update(t, sightings, quad != null)
@@ -225,10 +288,126 @@ class ScanEngine {
             reading = textCands.firstOrNull()?.takeIf { textCardLike && now - textAt < 2000 && it.score >= 0.6f }?.let { "#${it.card.number} ${it.card.name}" },
             pool = Graph.refs.index.size, ms = a.millis,
         )
-        if (confirmed != null) try {
-            confirm(c, resolveReprint(c, confirmed), a.sightings.firstOrNull()?.cands?.mapNotNull { c.card(it.key) } ?: emptyList(),
-                if (a.sightings.any { it.key == confirmed }) "vision" else "text")
-        } catch (e: Exception) { Log.e(TAG, "confirm $confirmed", e) }
+        if (confirmed != null) {
+            val key = resolveReprint(c, confirmed)
+            val alternatives = a.sightings.firstOrNull()?.cands?.mapNotNull { c.card(it.key) } ?: emptyList()
+            val via = if (a.sightings.any { it.key == confirmed }) "vision" else "text"
+            // the database and the pool's update don't hold up the camera
+            Lasting.launch { try { confirm(c, key, alternatives, via) } catch (e: Exception) { Log.e(TAG, "confirm $confirmed", e) } }
+        }
+        // A blurry card in the guide: the camera may be focused on what's behind it
+        if (quad != null && a.sharpness in 1f..BLURRY && now - focusAt > FOCUS_MS) { focusAt = now; onBlurry?.invoke() }
+    }
+
+    /** Called when a card in the guide is out of focus. */
+    @Volatile var onBlurry: (() -> Unit)? = null
+    private var focusAt = 0L
+
+    /** Drops sightings of prints in the wrong language; true while the text has yet to say. A card
+     *  of the set being scanned needs no such check, nor does anything once the reader had time. */
+    private fun checkLanguage(c: Catalog, sightings: MutableMap<String, Float>, now: Long): Boolean {
+        val want = Graph.prefs.value.scanLanguage
+        if (want != "auto" || sightings.isEmpty()) {
+            if (want != "auto") sightings.keys.removeAll { k -> c.card(k)?.let { it.lang != want && it.setId != session.set.value } == true }
+            langWaitSince = 0L
+            return false
+        }
+        val read = textLang?.takeIf { now - textLangAt < LANG_MS }
+        var waiting = false
+        for (k in sightings.keys.toList()) {
+            val card = c.card(k) ?: continue
+            if (card.setId == session.set.value) continue
+            val latin = card.lang == "en" || card.lang == "id"
+            when {
+                // (the text may be from the card before: read this one)
+                read == "latin" -> if (!latin) { sightings.remove(k); waiting = true }
+                read != null -> if (latin) { sightings.remove(k); waiting = true }
+                // only when an English print of it looks like this too: nothing else to mix it up with
+                !latin && hasLatinTwin(c, card, now) -> {
+                    if (langWaitSince == 0L) langWaitSince = now
+                    if (now - langWaitSince < LANG_WAIT_MS) { sightings.remove(k); waiting = true }
+                }
+            }
+        }
+        if (!waiting) langWaitSince = 0L
+        return waiting
+    }
+
+    /** The built-in index just ranked an English or Indonesian print of this card near the top. */
+    private fun hasLatinTwin(c: Catalog, card: Card, now: Long): Boolean = looksLike.entries.any { (k, v) ->
+        v.first >= 0.15f && now - v.second < LOOKS_MS && c.card(k)?.let { (it.lang == "en" || it.lang == "id") && it.name.equals(card.name, ignoreCase = true) } == true
+    }
+
+    /** The card's images most likely to be it, ready to be checked against it: the ones the
+     *  built-in index keeps coming back to, a few at a time. */
+    private fun fetchLikely(c: Catalog, all: List<AtlasHit>) {
+        // Only the languages being collected: Indonesian 151 looks just like English 151, and
+        // fetching it would make one card two. A card in another language is found by its text.
+        val hits = all.take(12).filter { h -> preferred(c, h.keys) != null }
+        if (hits.isEmpty()) return
+        val top = hits.take(4).map { it.row }.toSet()
+        val steady = hits.take(2).filter { it.row in lastTop }
+        lastTop = top
+        // only some frames show the card sharply: one clear answer is worth checking
+        val clear = hits.take(1).filter { hits.size < 2 || it.score - hits[1].score >= CLEAR_LEAD }
+        val want = (clear + steady).mapNotNull { h -> preferred(c, h.keys) }.distinct().filter { it !in Graph.refs.index.keys && it !in fetched }
+        if (want.isEmpty()) return
+        if (fetched.size > 400) fetched.clear()
+        fetched += want
+        Graph.refs.addCards(c, want)
+    }
+
+    /** Of the cards printed with one image, the one you most likely have. */
+    private fun preferred(c: Catalog, keys: List<String>): String? {
+        val s = Graph.prefs.value
+        val cards = keys.mapNotNull { c.card(it) }.filter {
+            it.setId == session.set.value || if (s.scanLanguage == "auto") it.lang in s.cardLanguages else it.lang == s.scanLanguage
+        }
+        return (cards.firstOrNull { it.setId in Graph.refs.poolSetIds } ?: cards.firstOrNull { it.lang == "en" } ?: cards.firstOrNull())?.key
+    }
+
+    private fun remember(c: Catalog, hits: List<AtlasHit>) {
+        val now = System.currentTimeMillis()
+        val top = hits.first().score
+        for ((rank, h) in hits.withIndex()) {
+            // not enough to confirm a card by name and looks alone: prints of one Pokémon look
+            // alike. It decides which prints get their real images fetched and checked first.
+            val v = when { top - h.score < ART_TIE -> 0.2f; rank < 5 -> 0.15f; else -> 0.1f }
+            for (k in h.keys) {
+                val old = looksLike[k]
+                if (old == null || now - old.second > LOOKS_MS || v >= old.first) looksLike[k] = v to now
+            }
+        }
+        if (hits.size < 2 || top - hits[1].score >= CLEAR_LEAD) looksLang = hits.first().keys.firstOrNull()?.let { c.card(it)?.lang }
+        if (looksLike.size > 2000) looksLike.entries.removeIf { now - it.value.second > LOOKS_MS }
+    }
+
+    /** How much each card looks like what's in the guide, for weighing what the text says. */
+    private fun looks(): Map<String, Float> {
+        val now = System.currentTimeMillis()
+        return looksLike.entries.filter { now - it.value.second < LOOKS_MS }.associate { it.key to it.value.first }
+    }
+
+    /** The two bands of the straightened card that say which card it is, the name along the top
+     *  and the number along the bottom, enlarged: the reader needs tall characters and reads
+     *  much faster without the attack text. */
+    private fun stripsBitmap(gray: Mat, q: Quad): Bitmap {
+        val top = Fingerprint.warpBand(gray, q, STRIP_W, STRIP_H, 0f, STRIP)
+        val bottom = Fingerprint.warpBand(gray, q, STRIP_W, STRIP_H, 1f - STRIP, 1f)
+        val both = Mat()
+        org.opencv.core.Core.vconcat(listOf(top, bottom), both)
+        val rgba = Mat()
+        Imgproc.cvtColor(both, rgba, Imgproc.COLOR_GRAY2RGBA)
+        val bmp = Bitmap.createBitmap(both.cols(), both.rows(), Bitmap.Config.ARGB_8888)
+        Utils.matToBitmap(rgba, bmp)
+        top.release(); bottom.release(); both.release(); rgba.release()
+        return bmp
+    }
+
+    /** Lines read off the strips, placed where they are on the card. */
+    private fun unstrip(lines: List<OcrLine>): List<OcrLine> = lines.map { l ->
+        fun y(v: Float) = if (v < 0.5f) v * 2f * STRIP else 1f - STRIP + (v - 0.5f) * 2f * STRIP
+        OcrLine(l.text, floatArrayOf(l.box[0], y((l.box[1] + l.box[3]) / 2 - (l.box[3] - l.box[1]) / 2), l.box[2], y((l.box[1] + l.box[3]) / 2 + (l.box[3] - l.box[1]) / 2)))
     }
 
     /** The card straightened at high resolution for the text reader. */
@@ -245,18 +424,21 @@ class ScanEngine {
     /** onCard: the image is the card's outline straightened; else a rough crop around the guide,
      *  where positions only mean something relative to the text itself. */
     private suspend fun readText(bmp: Bitmap, c: Catalog, onCard: Boolean) {
-        suspend fun read(b: Bitmap, script: String) = ocr.read(b, script).let { if (onCard) it else TextMatch.fitted(it) }
+        suspend fun read(b: Bitmap, script: String) = com.mivimoose.core.vision.Prof.time("ocr.$script") { ocr.read(b, script) }.let { if (onCard) unstrip(it) else TextMatch.fitted(it) }
         val want = Graph.prefs.value.scanLanguage
         // Automatic: Latin first (it also reads numbers on Asian cards); the Japanese reader
         // (Japanese + Latin) is tried when Latin finds no usable name, and kept while the cards
         // it reads really are in Japanese/Chinese/Korean.
+        // (What the card looks like says which reader to try first.)
+        val lookLang = looksLang
+        if (want == "auto" && lookLang != null) ocrScript = if (lookLang == "ja" || lookLang.startsWith("zh")) "ja" else "en"
         val first = if (want == "auto") ocrScript else want
         var lines = read(bmp, first)
         var clues = TextMatch.clues(lines)
         var script = first
         if (want == "auto") {
             val weak = clues.names.none { n -> n.count { it.isLetter() } >= 3 }
-            if (first == "en" && weak) {
+            if (first == "en" && weak && lookLang == null) {
                 val l2 = read(bmp, "ja"); val c2 = TextMatch.clues(l2)
                 if (c2.script != null) { lines = l2; clues = c2; script = "ja"; ocrScript = "ja" }
             } else if (first == "ja" && clues.script == null) {
@@ -272,24 +454,28 @@ class ScanEngine {
             TextMatch.clues(l2).takeIf { it.numbers.isNotEmpty() || it.names.isNotEmpty() }?.let { clues = it; lines = l2 }
         }
         val pool = Graph.refs.poolSetIds.toSet()
-        var cands = TextMatch.candidates(clues, c, pool, limit = 24)
+        val looksNow = looks()
+        var cands = TextMatch.candidates(clues, c, pool, limit = 24, looks = looksNow)
         // an upside-down card: the same words, read from the other end
         val flip = TextMatch.clues(TextMatch.rotated(lines))
         if (TextMatch.cardLike(flip) && !TextMatch.cardLike(clues) || flip.names.isNotEmpty()) {
-            val fc = TextMatch.candidates(flip, c, pool, limit = 24)
+            val fc = TextMatch.candidates(flip, c, pool, limit = 24, looks = looksNow)
             if ((fc.firstOrNull()?.score ?: 0f) > (cands.firstOrNull()?.score ?: 0f) + 0.05f) { clues = flip; cands = fc }
         }
         Log.i(TAG, "text[$script] numbers=${clues.numbers.map { it.number + "/" + it.total }} names=${clues.names.take(3)} " +
             "codes=${clues.codes.take(8)} -> ${cands.take(3).map { it.card.key + " %.2f".format(it.score) }}")
+        // Latin text only counts when it named a card: a Japanese card read as Latin gives gibberish
+        val heard = clues.script ?: "latin".takeIf { cands.firstOrNull()?.takeIf { it.why.contains("name") }?.card?.lang?.let { l -> l == "en" || l == "id" } == true }
+        if (heard != null) { textLang = heard; textLangAt = System.currentTimeMillis() }
         if (cands.isEmpty()) return
-        textCardLike = TextMatch.cardLike(clues)
+        textCardLike = TextMatch.cardLike(clues) || (looksNow[cands.first().card.key] ?: 0f) >= 0.15f
         textCands = cands
         textAt = System.currentTimeMillis()
         // The printed text names the set before the card is certain: start loading it now
         if (textCardLike && cands.first().score >= 0.6f) detect(cands.first().card.setId)
         // Let vision double-check the likely cards (more of them when the text was weak)
         // only in the leading card's language: a same-art print in another language would compete
-        val n = if (cands.first().score >= 0.7f) 3 else 24
+        val n = if (cands.first().score >= 0.7f) 3 else 12
         val lang = cands.first().card.lang
         Graph.refs.addCards(c, cands.filter { it.card.lang == lang }.take(n).map { it.card.key })
     }
@@ -464,7 +650,7 @@ class ScanEngine {
 
     /** Forget the current card and text reads (between benchmark sequences). */
     fun resetForBench() {
-        tracker.reset(); textCands = emptyList(); textAt = 0L; textCardLike = false
+        tracker.reset(); textCands = emptyList(); textAt = 0L; textCardLike = false; looksLike.clear(); looksLang = null; lastTop = emptySet(); namedKey = ""; namedSince = 0L; fetched.clear(); textLang = null; textLangAt = 0L; langWaitSince = 0L
         session.lastName = ""; session.lastKey = ""; session.lastAt = 0L; session.emptyAt = 0L; session.emptySince = 0L; session.rejectedKey = ""
     }
 
@@ -477,6 +663,25 @@ class ScanEngine {
         private const val EMPTY_MS = 1200L
         private const val SAME_CARD_MS = 5000L
         private const val TWIN_MS = 3000L
+        /** Artwork scores this close can't tell two images apart. */
+        private const val ART_TIE = 0.03f
+        /** The best image this far ahead of the next one: most likely the card itself. */
+        private const val CLEAR_LEAD = 0.05f
+        private const val LOOKS_MS = 1200L
+        private const val NAMED_MS = 1800L
+        private const val WARM_FRAMES = 3
+        private const val WARM_MS = 500L
+        private const val SETTLED_MS = 400L
+        private const val BLURRY = 40f
+        private const val FOCUS_MS = 1500L
+        private const val LANG_MS = 1500L
+        private const val LANG_WAIT_MS = 1000L
+        /** The bands read off a card: this share of its height at either end, enlarged. */
+        private const val STRIP = 0.17f
+        private const val STRIP_W = 860
+        private const val STRIP_H = 1200
+        /** Outlives the scanner screen: a text read still holds its image, and a scan must get saved. */
+        private val Lasting = CoroutineScope(SupervisorJob() + Dispatchers.Default + CoroutineExceptionHandler { _, e -> Log.e(TAG, "reader", e) })
         /** When this session of scanning began (for the strip of its scans). */
         val sessionStart get() = SESSION.startedAt
     }

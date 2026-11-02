@@ -94,7 +94,7 @@ fun SetScreen(vm: AppVM, nav: NavHostController, setId: String) {
                     Text(set.name, style = MaterialTheme.typography.headlineSmall, modifier = Modifier.weight(1f, false))
                     if (set.lang != "en") { Spacer(Modifier.width(8.dp)); Tag(LANGUAGE_FLAGS[set.lang] ?: set.lang, Vault.periwinkle) }
                 }
-                Text(listOfNotNull(set.nameLocal, set.series, set.release, set.code).joinToString(" · "), color = Vault.muted, fontSize = 12.sp)
+                Text(listOfNotNull(set.nameLocal, set.series, if (set.dateApprox) set.release.take(7).ifEmpty { null }?.let { "around $it" } else set.release, set.code).joinToString(" · "), color = Vault.muted, fontSize = 12.sp)
                 if (set.incomplete) Text("This card list may be missing secret rares.", color = Vault.warn, fontSize = 12.sp)
                 Spacer(Modifier.height(14.dp))
                 Glass {

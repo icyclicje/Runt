@@ -25,8 +25,6 @@ from app.refs import RefStore                      # noqa: E402
 from tests import synth2                           # noqa: E402
 from tests.bench_vision import color_images        # noqa: E402
 
-SIZE = (1280, 720)          # portrait phone frame (h, w)
-
 
 def export_refs(out_dir, set_id, ix):
     path = os.path.join(out_dir, f'refs_{set_id}.bin')
@@ -52,7 +50,9 @@ def main():
     ap.add_argument('--seed', type=int, default=3)
     ap.add_argument('--other', default='sv4', help='set for background clutter (must not be loaded in the bench)')
     ap.add_argument('--phone', action='store_true', help='hold the card the way the phone scanner asks: centred, filling most of the frame')
+    ap.add_argument('--hd', action='store_true', help='1080x1920, what the phone camera really gives the scanner')
     a = ap.parse_args()
+    SIZE = (1920, 1080) if a.hd else (1280, 720)
 
     out = os.path.join(a.cache, 'android_bench')
     os.makedirs(out, exist_ok=True)
@@ -80,7 +80,7 @@ def main():
         if c.key not in imgs:
             continue
         scene = synth2.Scene(rng, size=SIZE, art_pool=art_pool, hard=a.hard)
-        look = synth2.CardLook(imgs[c.key], rng, hard=a.hard, tex_h=1000 if a.phone else 420)
+        look = synth2.CardLook(imgs[c.key], rng, hard=a.hard, tex_h=(1400 if a.hd else 1000) if a.phone else 420)
         if a.phone:
             scene.lowres = False                    # phones capture at 1080p, not a 640x360 webcam
         path = synth2.handheld_path(rng, SIZE, hold_frames=24, hard=a.hard)

@@ -9,6 +9,7 @@ import android.util.Log
 import com.mivimoose.core.catalog.BundleParser
 import com.mivimoose.core.catalog.Card
 import com.mivimoose.core.catalog.Catalog
+import com.mivimoose.core.vision.Atlas
 import com.mivimoose.core.vision.CardIndex
 import com.mivimoose.core.vision.Fingerprint
 import com.mivimoose.core.vision.RefCard
@@ -31,6 +32,7 @@ import java.io.DataInputStream
 import java.io.DataOutputStream
 import java.io.File
 import java.util.concurrent.ConcurrentHashMap
+import java.util.zip.GZIPInputStream
 
 /**
  * Reference cards for recognition: each card's scan is downloaded once, turned into a
@@ -38,7 +40,7 @@ import java.util.concurrent.ConcurrentHashMap
  * "pool": the sets you are opening or scanned recently, plus single cards the text reader
  * suggested.
  */
-class RefRepo(ctx: Context, private val net: Net, private val scope: CoroutineScope) {
+class RefRepo(private val ctx: Context, private val net: Net, private val scope: CoroutineScope) {
     private val dir = File(ctx.filesDir, "refs").apply { mkdirs() }
     private val mem = ConcurrentHashMap<String, RefCard>()
     private val setLoaded = ConcurrentHashMap<String, Boolean>()
@@ -57,9 +59,27 @@ class RefRepo(ctx: Context, private val net: Net, private val scope: CoroutineSc
     val poolSetIds: List<String> get() = synchronized(poolSets) { poolSets.toList() }
 
     private val downloads = Semaphore(6)
+    /** No whole sets get loaded (the benchmark of cards seen for the first time). */
+    @Volatile var noSets = false
+    private val inFlight: MutableSet<String> = ConcurrentHashMap.newKeySet()
+    private val rebuildAsked = java.util.concurrent.atomic.AtomicBoolean(false)
+
+    /** Reads the built-in index of every card (once; a moment's work, off the main thread). */
+    fun loadAtlas() = scope.launch(Dispatchers.IO) {
+        if (index.atlas != null) return@launch
+        runCatching {
+            val t0 = System.currentTimeMillis()
+            // the build unpacks .gz assets and stores them under the plain name
+            val keys = runCatching { ctx.assets.open("data/atlas_keys.txt").bufferedReader().readText() }.getOrNull()
+                ?: GZIPInputStream(ctx.assets.open("data/atlas_keys.txt.gz")).bufferedReader().readText()
+            index.atlas = ctx.assets.open("data/atlas.bin").use { Atlas(it, keys) }
+            Log.i(TAG, "atlas: ${index.atlas?.size} images in ${System.currentTimeMillis() - t0} ms")
+        }.onFailure { Log.e(TAG, "atlas", it) }
+    }
 
     /** Make these sets (and extra single cards) the recognition pool. */
     fun setPool(catalog: Catalog, setIds: List<String>, extraKeys: Collection<String> = emptyList()) {
+        if (noSets) return
         synchronized(poolSets) {
             if (poolSets.toList() == setIds && poolExtra.containsAll(extraKeys) && setIds.all { setLoaded[it] == true }) return
             poolSets.clear(); poolSets += setIds
@@ -68,17 +88,32 @@ class RefRepo(ctx: Context, private val net: Net, private val scope: CoroutineSc
         }
         scope.launch(Dispatchers.IO) {
             rebuild(catalog)                                 // what's already in memory, right away
-            for (s in setIds) if (setLoaded[s] != true) { ensureSet(catalog, s) { rebuild(catalog) }; rebuild(catalog) }
+            for (s in setIds) if (setLoaded[s] != true) {
+                // not after every batch: each rebuild takes CPU from the camera frames
+                var last = System.currentTimeMillis()
+                ensureSet(catalog, s) { if (System.currentTimeMillis() - last > 2000) { rebuild(catalog); last = System.currentTimeMillis() } }
+                rebuild(catalog)
+            }
         }
     }
 
     /** Add single cards (e.g. what the text on a card suggested) to the pool. */
     fun addCards(catalog: Catalog, keys: Collection<String>) = scope.launch(Dispatchers.IO) {
-        val todo = keys.filter { it !in index.keys }
+        val todo = keys.filter { it !in index.keys && inFlight.add(it) }
         if (todo.isEmpty()) return@launch
         synchronized(poolSets) { poolExtra += todo }
-        todo.mapNotNull { catalog.card(it) }.map { c -> async { load(c) } }.awaitAll()
-        rebuild(catalog)
+        // each one as soon as it's here: the right card may be the first to arrive
+        todo.map { k -> async {
+            try { catalog.card(k)?.let { load(it) }?.let { rebuildSoon(catalog) } } finally { inFlight.remove(k) }
+        } }.awaitAll()
+    }
+
+    /** Rebuilds once for however many cards arrive meanwhile. */
+    private fun rebuildSoon(catalog: Catalog) {
+        if (rebuildAsked.compareAndSet(false, true)) scope.launch(Dispatchers.IO) {
+            rebuildAsked.set(false)
+            rebuild(catalog)
+        }
     }
 
     private fun rebuild(catalog: Catalog) {

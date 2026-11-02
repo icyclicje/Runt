@@ -60,8 +60,10 @@ class App : Application(), SingletonImageLoader.Factory {
         Graph.prices = PriceRepo(tcg, PriceCharting(net), net, Graph.store, Graph.catalog, Graph.prefs, Graph.scope)
         Graph.sounds = Sounds(this, Graph.prefs)
         Notifier.init(this, Graph.money)
+        Graph.catalog.keepSets = { Graph.store.owned().map { it.cardKey.substringBefore('|') }.toSet() }
         Graph.catalog.start()
         Graph.refs.loadSingles()
+        Graph.refs.loadAtlas()
         Graph.scope.launch(Dispatchers.IO) { Graph.money.refresh() }
         PriceWorker.schedule(this)
     }

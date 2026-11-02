@@ -1,0 +1,8 @@
+HSPLcom/mivimoose/core/vision/**;->**(**)**
+HSPLcom/mivimoose/core/text/**;->**(**)**
+HSPLcom/mivimoose/core/catalog/Catalog;->**(**)**
+HSPLcom/mivimoose/scanner/scan/**;->**(**)**
+HSPLorg/opencv/core/**;->**(**)**
+HSPLorg/opencv/imgproc/**;->**(**)**
+HSPLorg/opencv/features2d/**;->**(**)**
+HSPLorg/opencv/calib3d/**;->**(**)**

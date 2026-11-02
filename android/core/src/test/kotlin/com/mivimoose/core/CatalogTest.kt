@@ -26,6 +26,24 @@ class CatalogTest {
         println("catalog: ${cat.sets.size} sets, ${cat.cardCount} cards, languages ${cat.languages()}")
     }
 
+    /** A list key used twice crashes the app: set lists have one heading per series, set pages one tile per card. */
+    @Test
+    fun listsNeverRepeatAKey() {
+        val zh = java.io.File(TestData.cache, "../../android/app/src/main/assets/data/zh_sets.json.gz")
+        val c = if (zh.exists()) com.mivimoose.core.catalog.Chinese.merge(cat, com.mivimoose.core.catalog.Chinese.fromJson(
+            java.util.zip.GZIPInputStream(zh.inputStream()).bufferedReader().readText())) else cat
+        for (lang in c.languages()) {
+            var last = ""
+            val seen = HashSet<String>()
+            for (s in c.setsFor(lang).filter { !it.firstEdition }) if (s.series != last) {
+                assertTrue("$lang: ${s.series} comes twice", seen.add(s.series))
+                last = s.series
+            }
+        }
+        for (s in c.sets.values) assertEquals(s.id, s.cards.size, s.cards.map { it.key }.toSet().size)
+        println("catalog with Chinese sets: ${c.sets.size} sets, ${c.cardCount} cards; " + c.languages().joinToString { l -> "$l ${c.setsFor(l).size}" })
+    }
+
     @Test
     fun normalisesNumbers() {
         assertEquals("1", Catalog.normNumber("001"))
@@ -69,6 +87,15 @@ class CatalogTest {
         assertTrue(c.isNotEmpty())
         assertEquals("sv3pt5|199|Charizard EX", c.first().card.key)
         println("top: " + c.take(3).joinToString { "${it.card.key} %.2f (${it.why})".format(it.score) })
+
+        // A number and set code alone name the card, even with the code's space lost
+        val coded = Catalog(listOf(cat.set("sv3pt5")!!.also { it.code = "MEW" }, cat.set("ecard1")!!.also { it.code = "EX" }), "")
+        val nameless = TextMatch.candidates(TextMatch.clues(listOf(line("MEWEN 132/165", 0.95f, 0.97f))), coded)
+        assertEquals("sv3pt5|132|Ditto", nameless.first().card.key)
+        assertTrue("score ${nameless.first().score}", nameless.first().score >= 0.6f)
+        // Rules text isn't a set code: "Pokémon ex" doesn't mean Expedition (EX)
+        val rule = TextMatch.clues(listOf(line("When your Pokemon ex is Knocked Out", 0.86f, 0.88f), line("MEW EN 184/165", 0.95f, 0.97f)))
+        assertTrue("codes ${rule.codes}", "EX" !in rule.codes)
 
         // A misread digit (122 read as 022) is outvoted by the name and the set size
         val t0 = System.nanoTime()

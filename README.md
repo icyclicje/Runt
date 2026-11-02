@@ -16,9 +16,11 @@ refreshes it from the site in the background.
 
 ### Scanning
 
-Hold a card inside the guide. There's no set or pack to pick: the scanner works out the
-set from the first card it reads and loads all of that set, so the rest scan in a fraction
-of a second. The set it detected is shown at the top (tap it to choose one by hand).
+Hold a card inside the guide. There's no set or pack to pick, and any card in the database
+can scan first: a small index of every card is built into the app, so the likely prints are
+known at once and only their images are fetched. The scanner then works out the set and
+loads all of it in the background. The set it detected is shown at the top (tap it to
+choose one by hand).
 
 - **Collect** (the default, the setting *Add scanned cards to my collection automatically*):
   every scan goes into your collection by itself, nothing to tap. A card you already own is
@@ -48,20 +50,30 @@ and neither does taking it away, leaving for its details and coming back while i
 there. A second copy of the same card scans once the first has been taken away (the guide
 empty for about a second).
 
-How it recognises cards:
+How it recognises cards, cheapest look first:
 
-1. **Artwork:** the card's keypoints are matched against the set being scanned and the
-   sets scanned recently (fast, works in sleeves and at angles), then checked against the
-   card's edges.
-2. **Outline:** the card's edges are found, it's straightened and fingerprinted.
-3. **Printed text:** the collector number, set code (e.g. `MEW 199/165`, `SV2a`) and name
-   are read on the phone (ML Kit; nothing is uploaded), so any of the 67,000+ cards can be
-   found before its set is loaded. One misread character is tolerated. The card's scan is
-   then downloaded and checked by sight. As soon as the text names a set, the whole set
-   starts loading (most valuable cards first), so the rest of the pack scans instantly.
+1. **Outline:** the card's edges are found, it's straightened and fingerprinted, then
+   checked with keypoints against the loaded cards. Most frames stop here, in a fraction of
+   the time of a full search.
+2. **Artwork:** when that doesn't settle it, keypoints over the whole frame are matched
+   against the loaded cards (works in sleeves, at angles and without visible edges). A
+   match has to include the artwork: cards of a set share their layout, which alone gives
+   dozens of matches between two different cards.
+3. **Built-in index:** every card image as a tiny signature (7 MB), searched in about a
+   millisecond. It suggests, never decides: compressed fingerprints confuse prints of one
+   Pokémon, so the suggested cards' real images are fetched and checked by step 1.
+4. **Printed text:** only the name and number strips of the card are read, enlarged, on
+   the phone (ML Kit; nothing is uploaded). The prints of a name that was read are fetched
+   and checked too, best-looking first. A collector number with its set code
+   (`MEW 199/165`) and a matching name or look is enough by itself. One misread character
+   is tolerated. Prints in another language share their artwork, so the text decides those.
 
 English, Japanese, Korean, Chinese (traditional and simplified), Thai and Indonesian
-cards are in the database; the text reader switches to Japanese by itself.
+cards are in the database. The built-in index only fetches English and Japanese prints unless
+another language is chosen with the scanner's language button (Indonesian 151 looks just
+like English 151); cards in other languages are still found by their text. The text reader
+switches to Japanese by itself. Simplified Chinese cards and Traditional sets from 2025 on
+aren't in the built-in index yet, so they're found by their text and take longer.
 
 ### The rest of the app
 
@@ -90,6 +102,8 @@ cards are in the database; the text reader switches to Japanese by itself.
 | What | Source |
 |---|---|
 | Sets and cards | the MivimooseRips site (refreshed every 12 h), plus TCGplayer's catalog via tcgcsv.com for sets and cards the site doesn't have yet (e.g. ME06 Delta Reign) |
+| Chinese (Traditional) | the official Trainers Website (asia.pokemon-card.com/tw): built in, and new sets checked daily |
+| Chinese (Simplified) | [zsjy947/PTCG-card-data](https://github.com/zsjy947/PTCG-card-data) (CC0, a weekly copy of the community's database tcg.mik.moe, which also serves the images): built in, and changes checked daily. The site's old "Simplified" sets were its Traditional lists under another name, so they're gone. Prices of Chinese cards are estimates from the same card in Japanese or English |
 | Prices | **Live from TCGplayer:** each card's latest sales and the cheapest near-mint copy for sale right now, for every printing (see below); for cards without recent sales, TCGplayer's market price capped by the cheapest listing. Everything else uses TCGplayer's daily prices (tcgcsv.com): the newest sets, the sets you collect, and a set as soon as the scanner detects it. (The site's own prices ran up to a third above what cards sell for, e.g. $861 for a Mega Gengar ex selling at $644, so the app no longer uses them.) Every 15 min while open, every 6 h in the background |
 | Pack prices | Live from TCGplayer: the booster pack's latest sales and cheapest sealed listing |
 | Poké Ball and Master Ball patterns | separate TCGplayer products, attached to their cards |
@@ -113,23 +127,45 @@ one generic estimate.
 
 ### Scanning results
 
-Synthetic phone footage: each card is brought up to the camera, held about a second and
-taken away, at 720x1280 (a real phone gives the scanner 1080x1920). Measured on the Android
-emulator running the whole app, starting with no set loaded, non-card objects first:
+Synthetic phone footage at 1080x1920: each card is brought up to the camera, held for about a
+second and a half and taken away. Played in real time through the whole app on the Android
+emulator (release build): frames that go by during analysis are skipped, as with a real
+camera, and a card still unscanned when it's taken away counts as missed. Time is from the
+moment the card is held.
 
-| Test | Scanned | False or double scans |
-|---|---|---|
-| 151, all rarities, held in the guide (30 cards) | 30/30 | 0 |
-| Non-card objects (27: booster packs, posters of card art, printed checklists, books, phones, keyboards, card backs) | none | 0, and outlined as a card in 0 of 1,181 frames |
+| Test | Scanned | Time to scan, median | False or double scans |
+|---|---|---|---|
+| 151 and modern rares (Mega Evolution SIRs and more), sets loaded, 30 cards | 27-28/30 | 190-570 ms | 0 |
+| The same, every card seen for the first time: no set loaded, images forgotten | 12-21/30 | 0.7-1 s | 0 |
+| Japanese 151, set loaded as it goes, 12 cards | 9-11/12 | about 590 ms | 0 |
+| Japanese 151, every card seen for the first time | 4-5/12 | 610-780 ms | 0 |
 
-The emulator is slow, so it gets more text reads per card than this footage's length
-suggests. It hasn't been measured on a real phone with a real camera.
+Ranges are repeated runs: the emulator's speed drifted between 58 and 150 ms per frame, and
+its text reader between 0.6 and 3 s per read. Cards missed ran out of the hold, so holding a
+card a little longer helps. Before this round the first-time test scanned 0/30 in real time,
+because a card had to wait for its collector number to be read; the earlier "30/30" came from
+a slow replay that gave the text reader ten times too long. This hasn't been measured on a real
+phone with a real camera yet.
 
-Recognition alone (desktop, sets already loaded): 30/30 phone footage, 39/40 handheld, 29/30
-modern rares, 28/30 in hard conditions (blur, glare, steep angles), no false or double
-scans. Non-card objects with their artwork's sets loaded: outlined in 9 of 1,181 frames, and
-one scan, of a test background that is a picture of a real card filling the whole frame,
-which looks the same as a card held very close.
+On this PC the emulator also crashes at random on the P-cores, with errors no app code could
+cause, and the build from before this round does the same (2 of 4 runs); on the E-cores, 21 of
+21 runs had no crash. That's put down to the CPU (see *This PC* below), not the app.
+
+Recognition alone (desktop, sets loaded, at a phone's speed, 720p):
+
+| Footage | Scanned | Median | p90 | False or double |
+|---|---|---|---|---|
+| Held in the guide (phone) | 30/30 (was 29) | 157 ms (was 382) | 450 ms (was 555) | 0 |
+| Handheld, anywhere in the frame (normal) | 39/40 | 210 ms | 455 ms | 0 |
+| Modern rares | 29/30 | 162 ms | 383 ms | 0 |
+| Hard conditions (blur, glare, steep angles) | 28/30 (was 24) | 205 ms (was 337) | 535 ms (was 792) | 0 |
+| Japanese 151 | 11/12 | 220 ms | 270 ms | 0 |
+
+Non-card objects (27: booster packs, posters of card art, printed checklists, books, phones,
+keyboards, card backs) with their artwork's sets loaded: outlined as a card in 9 of 712 frames,
+with 2 false scans. Both have a real card picture filling the whole background with that card's
+set loaded, which looks the same as a card held very close. On the emulator: no scans, and
+outlined in 0 of 402 frames.
 
 ### Building
 
@@ -140,9 +176,16 @@ powershell -ExecutionPolicy Bypass -File android\build.ps1 :core:test           
 
 `build.ps1` runs Gradle on the efficiency cores with two workers, because this PC's
 i9-14900K crashes under heavy all-core load (see *This PC* below). Test footage comes from
-`python -m tests.export_android_bench tests\.cache --phone --name phone2`; on a device or
-emulator, start the app with `--es frames <folder>` to run the on-device benchmark
-(results in logcat under `BENCH`).
+`python -m tests.export_android_bench tests\.cache --phone --hd --name hd`; on a device or
+emulator, start the app with `--es frames <folder>` to run the on-device benchmark in real
+time (results in logcat under `BENCH`; a file named `cold` in the folder forgets all card
+images first, so every card is a first-time card).
+
+The built-in index (`assets/data/atlas.bin`) is rebuilt with `python -m tests.fetch_all_refs
+tests\.cache`, `android\build.ps1 :core:test --tests "*AtlasTools*" -Patlas=fingerprints` and
+`python -m tests.build_atlas tests\.cache`; the built-in Chinese lists
+(`assets/data/zh_sets.json.gz`) with `android\build.ps1 :core:test --tests "*ChineseTools*"
+-Patlas=zh`. Sets newer than the index still scan, by their text.
 
 ### This PC
 
